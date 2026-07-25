@@ -1,9 +1,9 @@
 """
 model.py
 
-MLP เดียวกันสำหรับทุกเทคนิคเปรียบเทียบใน imbalance_methods.py (ตามหลักการข้อ 2 ใน README:
-แยกผลของ "เทคนิคจัดการ imbalance" ออกจาก "สถาปัตยกรรมโมเดล") — ค่า default ตั้งตาม
-งานเดิม (200 hidden nodes, ReLU) เพื่อให้เทียบกับ baseline ได้ตรง
+The same MLP is used for every technique compared in imbalance_methods.py (principle 2 in the README:
+separate the effect of the "imbalance-handling technique" from the "model architecture"). Defaults follow
+prior work (200 hidden nodes, ReLU) for direct comparability with the baseline.
 """
 
 import torch
@@ -25,13 +25,13 @@ class FirewallMLP(nn.Module):
         )
 
     def forward(self, x):
-        return self.net(x)  # logits (raw, ยังไม่ softmax)
+        return self.net(x)  # logits (raw, before softmax)
 
 
 class FocalLoss(nn.Module):
-    """Focal loss (Lin et al., 2017) — ใช้เปรียบเทียบกับ cost-sensitive CE ใน RQ1
-    gamma: ยิ่งสูง ยิ่ง down-weight ตัวอย่างที่ classify ง่าย (majority class)
-    alpha: per-class weight (เทียบเท่า inverse class frequency ก็ได้ หรือปล่อย None)
+    """Focal loss (Lin et al., 2017) - compared against cost-sensitive CE in RQ1.
+    gamma: higher values down-weight easily-classified (majority-class) samples more.
+    alpha: per-class weight (e.g. inverse class frequency, or None).
     """
     def __init__(self, gamma: float = 2.0, alpha: torch.Tensor = None, reduction: str = "mean"):
         super().__init__()
@@ -60,8 +60,8 @@ class FocalLoss(nn.Module):
 
 
 def compute_class_weights(y_train_encoded: torch.Tensor, n_classes: int) -> torch.Tensor:
-    """weight ∝ inverse class frequency — ใช้กับทั้ง weighted-CE และ alpha ของ focal loss"""
+    """weight proportional to inverse class frequency - used for both weighted-CE and focal-loss alpha."""
     counts = torch.bincount(y_train_encoded, minlength=n_classes).float()
-    counts = torch.clamp(counts, min=1.0)  # กัน division by zero สำหรับ class ที่ไม่ปรากฏ
+    counts = torch.clamp(counts, min=1.0)  # avoid division by zero for absent classes
     weights = counts.sum() / (n_classes * counts)
     return weights

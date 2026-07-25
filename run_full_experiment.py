@@ -1,25 +1,26 @@
 """
 run_full_experiment.py
 
-สคริปต์หลักสำหรับรันการทดลองเต็มรูปแบบ (RQ1-RQ4 บนทั้ง 3 dataset) แบบปล่อยทิ้งไว้ได้หลายวัน
+Main script for running the full experiment (RQ1-RQ4 on all three datasets), designed to be
+left running for days.
 
-คุณสมบัติสำคัญ:
-  - รันต่อได้จากจุดที่ค้างไว้เสมอ แม้ไฟดับ/เครื่องแครช/ปิด terminal กะทันหัน
-    (ทุก unit งานย่อยเขียนผลลงไฟล์ทันทีที่เสร็จ ไม่มีการสะสมผลไว้ในหน่วยความจำเฉยๆ)
-  - รายงานความคืบหน้า (% เสร็จ, เวลาที่ใช้ไปแล้ว, เวลาที่คาดว่าจะเหลือ) ทุก 60 วินาที
-    ลงทั้งหน้าจอและไฟล์ progress.log
-  - unit งานที่ error จะถูกบันทึกแล้ว "ข้ามไปทำ unit ถัดไป" ไม่ทำให้การทดลองทั้งหมดหยุด
-  - รองรับ dataset ขนาดใหญ่ (mini-batch training + ใช้ GPU อัตโนมัติถ้ามี)
+Key features:
+  - Always resumable, even after a power loss / crash / sudden terminal close
+    (every work unit writes its result to disk as soon as it finishes; nothing is only held in memory).
+  - Reports progress (% done, elapsed time, estimated time remaining) every 60 seconds,
+    to both the screen and progress.log.
+  - A unit that errors is recorded and then "skipped so the next unit runs"; it does not halt the whole experiment.
+  - Handles large datasets (mini-batch training + automatic GPU use if available).
 
-วิธีใช้งาน:
-  1. แก้ไข DATASET_PATHS ด้านล่างให้ชี้ไปที่ไฟล์ข้อมูลจริงของคุณ
-     (ค่าเริ่มต้นชี้ไปที่ข้อมูลจำลองที่มีอยู่แล้ว ใช้ทดสอบว่าสคริปต์ทำงานถูกต้องก่อนได้)
-  2. รัน:  python run_full_experiment.py
-  3. ปล่อยทิ้งไว้ได้เลย — ถ้าไฟดับ/เครื่องรีสตาร์ท แค่รันคำสั่งเดิมซ้ำอีกครั้ง
-     สคริปต์จะข้าม unit ที่ทำเสร็จไปแล้วเองอัตโนมัติ ไม่ต้องเริ่มนับหนึ่งใหม่
-  4. เช็คความคืบหน้าได้ตลอดเวลาโดยไม่ต้องรอ ด้วยคำสั่ง:  python run_full_experiment.py --status
-  5. เมื่อเสร็จสมบูรณ์ ผลลัพธ์รวมทั้งหมดจะอยู่ที่ results_final/final_summary.json
-     พร้อมไฟล์ progress.log ที่เก็บ log การรันไว้ทั้งหมดให้ตรวจสอบย้อนหลังได้
+How to use:
+  1. Edit DATASET_PATHS below to point at your real data files
+     (the defaults point at existing mock data, useful for checking the script runs correctly first).
+  2. Run:  python run_full_experiment.py
+  3. Leave it running - if power is lost / the machine restarts, just run the same command again.
+     The script skips already-completed units automatically; it does not start over.
+  4. Check progress at any time without waiting, with:  python run_full_experiment.py --status
+  5. When complete, all combined results are at results_final/final_summary.json,
+     along with progress.log, which keeps the full run log for later inspection.
 """
 
 import argparse
@@ -46,9 +47,9 @@ from checkpoint_utils import (
 )
 
 # =============================================================================
-# ค่าตั้งต้นทั้งหมดอยู่ใน dataset_config.py แยกต่างหาก (ไฟล์นี้ *ไม่มีวันถูกแก้* โดยผมอีกต่อไป
-# ไม่ว่าจะส่งไฟล์ run_full_experiment.py เวอร์ชันใหม่กี่ครั้งเพื่อแก้บั๊กก็ตาม)
-# แก้ path/ค่าตั้งต้นทั้งหมดที่ dataset_config.py แทน ไม่ต้องมาแก้ในไฟล์นี้อีก
+# All defaults live separately in dataset_config.py (that file is *never* modified again,
+# no matter how many new bug-fixed versions of run_full_experiment.py are shipped).
+# Edit all paths/defaults in dataset_config.py instead; there is no need to edit this file.
 # =============================================================================
 from dataset_config import DATASET_PATHS, TECHNIQUE_NAMES, N_FOLDS, EPOCHS, HIDDEN_SIZE, \
     BATCH_SIZE, LEARNING_RATE, HEARTBEAT_SECONDS, SHAP_DATASETS, ADVERSARIAL_DATASET, \
@@ -57,13 +58,13 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 # =============================================================================
-# Cache ข้อมูลที่โหลด/preprocess แล้ว (ในหน่วยความจำระหว่างรัน ไม่ต้องโหลดซ้ำทุก unit)
+# Cache loaded/preprocessed data (in memory during a run, to avoid reloading for every unit)
 # =============================================================================
 _dataset_cache = {}
 
 
 def get_prepared_dataset(dataset_key: str):
-    """โหลด + ทำความสะอาด + encode label ของ dataset (ทำครั้งเดียวต่อการรัน 1 ครั้ง, cache ไว้ใน RAM)"""
+    """Load + clean + label-encode a dataset (done once per run, cached in RAM)."""
     if dataset_key in _dataset_cache:
         return _dataset_cache[dataset_key]
 
@@ -78,7 +79,7 @@ def get_prepared_dataset(dataset_key: str):
 
     X = X_df.values
     skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=42)
-    folds = list(skf.split(X, y))  # deterministic given random_state คงที่ -> resume ได้ผลเดิมเป๊ะ
+    folds = list(skf.split(X, y))  # deterministic given a fixed random_state -> resume reproduces exactly
 
     prepared = {
         "X": X, "y": y, "class_names": class_names, "n_classes": n_classes,
@@ -89,7 +90,7 @@ def get_prepared_dataset(dataset_key: str):
 
 
 # =============================================================================
-# การฝึกโมเดล (mini-batch, รองรับ GPU, รองรับ dataset ขนาดใหญ่)
+# Model training (mini-batch, GPU-capable, handles large datasets)
 # =============================================================================
 def train_and_eval_fold(X_train, y_train, X_val, y_val, n_features, n_classes, loss_fn,
                          epochs=EPOCHS, batch_size=BATCH_SIZE, lr=LEARNING_RATE,
@@ -126,7 +127,7 @@ def train_and_eval_fold(X_train, y_train, X_val, y_val, n_features, n_classes, l
 
 
 # =============================================================================
-# นิยาม unit งานทั้งหมด (deterministic — เหมือนกันทุกครั้งที่รัน ไม่ว่าจะ resume กี่รอบ)
+# Define all work units (deterministic - identical on every run, no matter how many times it resumes)
 # =============================================================================
 def build_unit_list():
     units = []
@@ -152,7 +153,7 @@ def build_unit_list():
 
 
 # =============================================================================
-# ฟังก์ชันประมวลผล unit แต่ละประเภท
+# Functions that process each type of unit
 # =============================================================================
 def run_cv_fold_unit(unit, tracker):
     dataset_key, tech_name, fold_idx = unit["dataset_key"], unit["technique"], unit["fold_idx"]
@@ -192,6 +193,18 @@ def run_shap_unit(unit, tracker):
     import shap
     import matplotlib
     matplotlib.use("Agg")
+    matplotlib.rcParams.update({
+        "figure.dpi": 150,
+        "savefig.dpi": 1200,
+        "font.size": 13,
+        "axes.titlesize": 14,
+        "axes.labelsize": 13,
+        "xtick.labelsize": 11,
+        "ytick.labelsize": 11,
+        "legend.fontsize": 11,
+        "axes.linewidth": 1.1,
+        "savefig.bbox": "tight",
+    })
     import matplotlib.pyplot as plt
     import pandas as pd
     from imbalance_methods import baseline_smote
@@ -210,7 +223,7 @@ def run_shap_unit(unit, tracker):
 
     model = FirewallMLP(n_features=data["n_features"], n_classes=data["n_classes"], hidden_size=HIDDEN_SIZE).to(DEVICE)
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
-    X_res_t = torch.as_tensor(X_res, dtype=torch.float32)  # เก็บบน CPU ก่อน ค่อยส่งเข้า GPU ทีละ batch
+    X_res_t = torch.as_tensor(X_res, dtype=torch.float32)  # keep on CPU first, then send to GPU batch by batch
     y_res_t = torch.as_tensor(y_res, dtype=torch.long)
     n_samples_shap = X_res_t.shape[0]
     model.train()
@@ -259,10 +272,11 @@ def run_shap_unit(unit, tracker):
     plt.figure()
     shap.summary_plot(shap_values, explain_sample, feature_names=data["feature_names"],
                        class_names=data["class_names"], plot_type="bar", show=False)
-    plt.title(f"Global Feature Importance — {dataset_key} (SHAP)")
+    plt.title(f"Global Feature Importance - {dataset_key} (SHAP)")
     plt.tight_layout()
     summary_path = os.path.join(OUTPUT_DIR, f"shap_summary_{dataset_key}.png")
-    plt.savefig(summary_path, dpi=150)
+    plt.savefig(summary_path, dpi=1200)
+    plt.savefig(summary_path.replace(".png", ".pdf"))
     plt.close()
 
     result = {"dataset_key": dataset_key, "hardest_class": hardest_class,
@@ -278,10 +292,11 @@ def run_shap_unit(unit, tracker):
             features=pd.Series(explain_sample[idx], index=data["feature_names"]).round(2),
             matplotlib=True, show=False,
         )
-        plt.title(f"Local Explanation — {dataset_key}: true={hardest_class}, predicted={data['class_names'][predicted_class]}")
+        plt.title(f"Local Explanation - {dataset_key}: true={hardest_class}, predicted={data['class_names'][predicted_class]}")
         plt.tight_layout()
         local_path = os.path.join(OUTPUT_DIR, f"shap_local_{dataset_key}.png")
-        plt.savefig(local_path, dpi=150, bbox_inches="tight")
+        plt.savefig(local_path, dpi=1200, bbox_inches="tight")
+        plt.savefig(local_path.replace(".png", ".pdf"), bbox_inches="tight")
         plt.close()
         result["local_plot_path"] = local_path
         result["local_example_predicted_class"] = data["class_names"][predicted_class]
@@ -344,8 +359,8 @@ def run_experiment():
 
     already_done = sum(1 for u in units if is_unit_done(u["id"]))
     if already_done > 0:
-        tracker._write_line(f"[RESUME] พบงานที่ทำเสร็จไปแล้วก่อนหน้านี้ {already_done}/{len(units)} unit "
-                             f"— จะข้ามไปทำส่วนที่เหลือต่อ ไม่เริ่มนับหนึ่งใหม่")
+        tracker._write_line(f"[RESUME] found {already_done}/{len(units)} units already completed "
+                             f"- skipping to the remaining ones, not starting over")
 
     stop_event = threading.Event()
 
@@ -375,13 +390,13 @@ def run_experiment():
                 done_count += 1
                 tracker.update(done_count, len(units))
             except Exception as e:
-                err_msg = f"[ERROR] unit {unit['id']} ล้มเหลว: {e}\n{traceback.format_exc()}"
+                err_msg = f"[ERROR] unit {unit['id']} failed: {e}\n{traceback.format_exc()}"
                 tracker._write_line(err_msg)
                 failed_units.append({"unit_id": unit["id"], "error": str(e)})
                 continue
     except KeyboardInterrupt:
-        tracker._write_line("[INTERRUPTED] ผู้ใช้กด Ctrl+C — บันทึกความคืบหน้าที่ทำไปแล้วไว้ครบถ้วน "
-                             "รันคำสั่งเดิมซ้ำเพื่อทำต่อได้ทันที")
+        tracker._write_line("[INTERRUPTED] user pressed Ctrl+C - all progress so far has been saved. "
+                             "Run the same command again to continue immediately.")
         stop_event.set()
         return
 
@@ -393,8 +408,8 @@ def run_experiment():
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         with open(os.path.join(OUTPUT_DIR, "failed_units.json"), "w", encoding="utf-8") as f:
             json.dump(failed_units, f, ensure_ascii=False, indent=2)
-        tracker._write_line(f"[WARN] มี {len(failed_units)} unit ที่ error — ดูรายละเอียดใน "
-                             f"{OUTPUT_DIR}/failed_units.json (รันสคริปต์ซ้ำเพื่อ retry unit เหล่านี้ได้)")
+        tracker._write_line(f"[WARN] {len(failed_units)} unit(s) errored - see details in "
+                             f"{OUTPUT_DIR}/failed_units.json (re-run the script to retry these units)")
 
     summarize_results()
 
@@ -403,7 +418,7 @@ def print_status():
     units = build_unit_list()
     done = load_all_done_units()
     n_done = sum(1 for u in units if u["id"] in done)
-    print(f"ความคืบหน้า: {n_done}/{len(units)} unit ({n_done/len(units)*100:.1f}%)")
+    print(f"Progress: {n_done}/{len(units)} units ({n_done/len(units)*100:.1f}%)")
     by_type = {}
     for u in units:
         t = u["type"]
@@ -414,7 +429,7 @@ def print_status():
     for t, (d, total) in by_type.items():
         print(f"  - {t}: {d}/{total}")
     if os.path.exists(PROGRESS_LOG_PATH):
-        print(f"\nดู log ละเอียดได้ที่ {PROGRESS_LOG_PATH} (10 บรรทัดล่าสุด):")
+        print(f"\nSee the detailed log at {PROGRESS_LOG_PATH} (last 10 lines):")
         with open(PROGRESS_LOG_PATH, encoding="utf-8") as f:
             lines = f.readlines()
         print("".join(lines[-10:]))
@@ -471,13 +486,13 @@ def summarize_results():
     out_path = os.path.join(OUTPUT_DIR, "final_summary.json")
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, ensure_ascii=False, indent=2)
-    print(f"[SUMMARY] บันทึกผลสรุปล่าสุดไว้ที่ {out_path} (อัปเดตทุกครั้งที่รันจบ หรือเรียก --summarize เอง)")
+    print(f"[SUMMARY] saved the latest summary to {out_path} (updated after every run, or call --summarize yourself)")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--status", action="store_true", help="แสดงความคืบหน้าปัจจุบันแล้วออกจากโปรแกรม (ไม่รันงานเพิ่ม)")
-    parser.add_argument("--summarize", action="store_true", help="รวมผลจาก unit ที่เสร็จแล้วเป็นไฟล์สรุป แล้วออก (ไม่รันงานเพิ่ม)")
+    parser.add_argument("--status", action="store_true", help="show current progress and exit (run no further work)")
+    parser.add_argument("--summarize", action="store_true", help="combine completed units into the summary file and exit (run no further work)")
     args = parser.parse_args()
 
     if args.status:

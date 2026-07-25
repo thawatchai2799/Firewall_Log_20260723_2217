@@ -1,12 +1,12 @@
 """
 feature_schema.py
 
-Canonical (unified) feature schema สำหรับงาน firewall / network-flow classification
-พร้อมตาราง mapping คอลัมน์ดิบของแต่ละ dataset ไปยัง schema กลาง
+Canonical (unified) feature schema for firewall / network-flow classification,
+with a mapping table from each dataset's raw columns to the shared schema.
 
-หลักการ: ใช้ "flow-level" feature ที่ทั้ง 3 dataset มีร่วมกันในทางแนวคิด (ต่อให้ชื่อคอลัมน์
-และหน่วยต่างกัน) ได้แก่ duration, byte count (ทั้งสองทิศทาง), packet count (ทั้งสองทิศทาง),
-source/destination port, protocol
+Principle: use "flow-level" features that all three datasets share conceptually (even if column
+names and units differ): duration, byte count (both directions), packet count (both directions),
+source/destination port, and protocol.
 """
 
 from dataclasses import dataclass, field
@@ -14,13 +14,13 @@ from typing import Dict, List, Optional
 
 
 # ---------------------------------------------------------------------------
-# Canonical schema: ชื่อ feature กลางที่ pipeline ทั้งหมดจะใช้ต่อจากนี้
+# Canonical schema: the shared feature names the whole pipeline uses from here on
 # ---------------------------------------------------------------------------
 CANONICAL_FEATURES: List[str] = [
     "src_port",
     "dst_port",
-    "protocol",          # ถ้า dataset ไม่มีคอลัมน์ protocol แยก ให้ infer จาก port/flag
-    "duration",           # หน่วย: วินาที
+    "protocol",          # if a dataset lacks a protocol column, infer from port/flag
+    "duration",           # unit: seconds
     "bytes_total",
     "bytes_sent",
     "bytes_received",
@@ -29,24 +29,24 @@ CANONICAL_FEATURES: List[str] = [
     "packets_received",
 ]
 
-# feature ที่มีเฉพาะใน Ertam & Kaya (ไม่มีใน dataset อื่น) — เก็บแยกไว้ไม่บังคับรวม
+# Features unique to Ertam & Kaya (absent from the others) - kept separate, not required
 ERTAM_ONLY_FEATURES: List[str] = ["nat_src_port", "nat_dst_port"]
 
 
 @dataclass
 class DatasetSpec:
-    """อธิบาย mapping คอลัมน์ดิบ -> canonical schema ของ 1 dataset"""
+    """Describes the raw-column -> canonical-schema mapping for one dataset."""
     name: str
     label_column: str
     column_map: Dict[str, str]           # raw_column_name -> canonical_name
     label_classes: List[str]
-    is_firewall_action_label: bool        # True เฉพาะ Ertam & Kaya (label space เดิม)
+    is_firewall_action_label: bool        # True only for Ertam & Kaya (original label space)
     notes: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
-# 1) Ertam & Kaya — Internet Firewall Data Set (Kaggle, Firat University)
-#    คอลัมน์ต้นฉบับ (ตามที่ paper/ Kaggle ระบุ):
+# 1) Ertam & Kaya - Internet Firewall Data Set (Kaggle, Firat University)
+#    Original columns (per this study / Kaggle):
 #    Source Port, Destination Port, NAT Source Port, NAT Destination Port,
 #    Action, Bytes, Bytes Sent, Bytes Received, Packets, Elapsed Time (sec),
 #    pkts_sent, pkts_received
@@ -69,14 +69,14 @@ ERTAM_KAYA_SPEC = DatasetSpec(
         "pkts_sent": "packets_sent",
         "pkts_received": "packets_received",
     },
-    notes="ไม่มีคอลัมน์ protocol แยกในเวอร์ชันที่พบทั่วไปบน Kaggle — ต้อง verify ก่อนใช้ "
-          "ถ้าไม่มี ให้ตั้ง protocol='unknown' หรือ infer จาก dst_port (heuristic เท่านั้น)",
+    notes="No separate protocol column in the common Kaggle version - verify before use. "
+          "If absent, set protocol='unknown' or infer from dst_port (heuristic only).",
 )
 
 
 # ---------------------------------------------------------------------------
-# 2) CIC-IDS2017 — MachineLearningCSV.zip (CICFlowMeter output, 78-79 columns)
-#    หมายเหตุ: ชื่อคอลัมน์ต้นฉบับมีช่องว่างนำหน้า (" Destination Port") ต้อง strip() ก่อนใช้
+# 2) CIC-IDS2017 - MachineLearningCSV.zip (CICFlowMeter output, 78-79 columns)
+#    Note: original column names have leading spaces (" Destination Port"); strip() before use
 # ---------------------------------------------------------------------------
 CICIDS2017_SPEC = DatasetSpec(
     name="cicids2017",
@@ -90,26 +90,26 @@ CICIDS2017_SPEC = DatasetSpec(
     ],
     column_map={
         "Destination Port": "dst_port",
-        "Flow Duration": "duration_microsec",   # หน่วยเป็น microsecond ต้องแปลง /1e6 -> วินาที
+        "Flow Duration": "duration_microsec",   # in microseconds; convert /1e6 -> seconds
         "Total Fwd Packets": "packets_sent",
         "Total Backward Packets": "packets_received",
         "Total Length of Fwd Packets": "bytes_sent",
         "Total Length of Bwd Packets": "bytes_received",
         "Protocol": "protocol",
     },
-    notes="ไม่มี src_port แยกอย่างชัดเจนในบางเวอร์ชัน (บางไฟล์ไม่มีคอลัมน์นี้เลยเพราะเป็น "
-          "flow-based ไม่ใช่ packet-based) — ตั้งเป็น NaN แล้ว impute/ตัดออกตอน feature "
-          "selection หากไม่มีจริง ต้อง verify คอลัมน์ที่ดาวน์โหลดมาก่อนเสมอ",
+    notes="Some versions lack a clear src_port column (flow-based files may omit it entirely "
+          "since they are flow-based, not packet-based) - set to NaN then impute/drop during "
+          "feature selection if truly absent. Always verify the downloaded columns first.",
 )
 
 
 # ---------------------------------------------------------------------------
-# 3) UNSW-NB15 — UNSW-NB15_1.csv ... _4.csv (49 features ตาม UNSW-NB15_features.csv)
+# 3) UNSW-NB15 - UNSW-NB15_1.csv ... _4.csv (49 features per UNSW-NB15_features.csv)
 # ---------------------------------------------------------------------------
 UNSW_NB15_SPEC = DatasetSpec(
     name="unsw_nb15",
-    label_column="attack_cat",     # ใช้ attack_cat (multi-class) แทน label (binary) เพื่อให้
-                                     # เทียบ severe multi-class imbalance ได้ตรงตามโจทย์
+    label_column="attack_cat",     # use attack_cat (multi-class) rather than label (binary) to
+                                     # match the severe multi-class imbalance the study targets
     is_firewall_action_label=False,
     label_classes=[
         "Normal", "Fuzzers", "Analysis", "Backdoors", "DoS", "Exploits",
@@ -125,13 +125,13 @@ UNSW_NB15_SPEC = DatasetSpec(
         "Spkts": "packets_sent",
         "Dpkts": "packets_received",
     },
-    notes="คอลัมน์ raw ไฟล์ CSV (UNSW-NB15_1.csv..._4.csv) ไม่มี header ในตัวไฟล์เอง "
-          "ต้องโหลด header จากไฟล์ features แยกต่างหาก ซึ่งในการดาวน์โหลดจริงมักชื่อ "
-          "'NUSW-NB15_features.csv' (สะกด N-U-S-W ไม่ใช่ U-N-S-W — เป็นจุดพิมพ์ผิดในชุดข้อมูล "
-          "ต้นฉบับที่มีมานาน) ไม่ใช่ 'UNSW-NB15_features.csv' ตามชื่อ dataset โดยรวม "
-          "นอกจากนี้คอลัมน์ชื่อ Spkts/Dpkts ใช้ตัวพิมพ์ใหญ่นำหน้า ต่างจากคอลัมน์อื่นๆ ส่วนใหญ่ที่เป็น "
-          "ตัวพิมพ์เล็กทั้งหมด (sport, dsport, proto, dur, sbytes, dbytes) ต้อง verify ตาม features "
-          "file จริงเสมอเพราะรายละเอียดนี้ต่างกันในแต่ละ mirror",
+    notes="The raw CSV files (UNSW-NB15_1.csv..._4.csv) have no header row themselves. "
+          "The header must be loaded from a separate features file, which is usually named "
+          "'NUSW-NB15_features.csv' (spelled N-U-S-W, not U-N-S-W - a long-standing typo in the "
+          "original dataset), not 'UNSW-NB15_features.csv' as the dataset name would suggest. "
+          "Also, Spkts/Dpkts are capitalised unlike most other columns, which are all "
+          "lowercase (sport, dsport, proto, dur, sbytes, dbytes). Always verify against the features "
+          "file, because these details differ between mirrors.",
 )
 
 
@@ -143,7 +143,7 @@ ALL_SPECS: Dict[str, DatasetSpec] = {
 
 
 def derived_bytes_total(df, spec: DatasetSpec):
-    """dataset บางตัวไม่มี bytes_total ตรงๆ ต้องคำนวณจาก sent+received"""
+    """Some datasets lack bytes_total directly; compute it from sent+received."""
     if "bytes_total" not in df.columns and {"bytes_sent", "bytes_received"} <= set(df.columns):
         df["bytes_total"] = df["bytes_sent"].fillna(0) + df["bytes_received"].fillna(0)
     if "packets_total" not in df.columns and {"packets_sent", "packets_received"} <= set(df.columns):

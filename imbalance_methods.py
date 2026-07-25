@@ -1,15 +1,15 @@
 """
 imbalance_methods.py
 
-รวม 5 เทคนิคจัดการ extreme class imbalance ตาม proposal ข้อ 4.2 (RQ1):
-  1. baseline_smote        - SMOTE + standard cross-entropy (ของเดิม)
+Five techniques for handling extreme class imbalance, in the main experiment (RQ1):
+  1. baseline_smote        - SMOTE + standard cross-entropy (the original baseline)
   2. cost_sensitive        - class-weighted cross-entropy
-  3. focal_loss            - focal loss (gamma, alpha ปรับได้)
-  4. hybrid_resample       - SMOTE-Tomek หรือ ADASYN + cost-sensitive loss
-  5. gan_oversample        - Conditional GAN/VAE oversampling (stub, ต้องพัฒนาเพิ่ม)
+  3. focal_loss            - focal loss (tunable gamma, alpha)
+  4. hybrid_resample       - SMOTE-Tomek or ADASYN + cost-sensitive loss
+  5. gan_oversample        - Conditional GAN/VAE oversampling (stub, not yet implemented)
 
-ทุกฟังก์ชันคืนค่าเป็น (X_resampled, y_resampled, loss_fn) หรือ (X, y, loss_fn) แล้วแต่กรณี
-เพื่อให้ pipeline.py เรียกใช้แบบเดียวกันทุกเทคนิค (uniform interface)
+Every function returns (X_resampled, y_resampled, loss_fn) or (X, y, loss_fn) as appropriate,
+so that pipeline.py can call every technique through one uniform interface.
 """
 
 from typing import Tuple, Callable
@@ -26,47 +26,47 @@ from model import FocalLoss, compute_class_weights
 
 def cap_majority_classes(X: np.ndarray, y: np.ndarray, max_class_size: int = 100_000,
                           random_state: int = 42) -> Tuple[np.ndarray, np.ndarray]:
-    """ลดขนาดเฉพาะ class ที่ใหญ่เกิน max_class_size ลงมาที่ max_class_size ก่อนทำ Tomek-link
-    cleaning (ไม่แตะ class ที่เล็กกว่านี้อยู่แล้ว)
+    """Undersample only classes larger than max_class_size down to max_class_size before Tomek-link
+    cleaning (classes already smaller than this are left untouched).
 
-    เหตุผลที่ต้องมีฟังก์ชันนี้: ขั้นตอน Tomek-link ใน SMOTETomek ต้องค้นหาคู่ nearest-neighbor
-    ที่ทับซ้อนกันข้ามทั้ง dataset รวมถึง majority class ด้วย (ไม่ใช่แค่ minority class ที่ SMOTE
-    สร้างเพิ่ม) สำหรับข้อมูลจริงขนาดหลักล้านแถว (เช่น CIC-IDS2017 ที่ BENIGN ~2 ล้านแถวต่อ train
-    fold) ขั้นตอนนี้จะช้ามากจนแทบไม่ขยับ (สังเกตได้จาก progress log ที่ค้างอยู่ unit เดียวนานผิด
-    ปกติ) การ undersample majority class ลงมาก่อน ทำให้ Tomek-link ทำงานบนข้อมูลขนาดที่จัดการได้
-    โดยยังคงแนวคิด "hybrid" (oversample minority + clean boundary) ไว้ครบถ้วน
+    Why this is needed: the Tomek-link step in SMOTETomek searches for overlapping nearest-neighbor
+    pairs across the whole dataset, including the majority class (not just the minority classes SMOTE
+    creates). On real data with millions of rows (e.g. CIC-IDS2017, BENIGN ~2M rows per train
+    fold) this step becomes so slow it barely progresses (visible as a single unit stalling in the
+    progress log). Undersampling the majority class first lets Tomek-link run on a manageable size
+    while fully preserving the "hybrid" idea (oversample minority + clean the boundary).
     """
     classes, counts = np.unique(y, return_counts=True)
     strategy = {int(c): max_class_size for c, cnt in zip(classes, counts) if cnt > max_class_size}
     if not strategy:
-        return X, y  # ไม่มี class ไหนใหญ่เกินเพดาน ไม่ต้องทำอะไร
+        return X, y  # no class exceeds the cap, nothing to do
     rus = RandomUnderSampler(sampling_strategy=strategy, random_state=random_state)
     return rus.fit_resample(X, y)
 
 
 def compute_capped_sampling_strategy(y_train: np.ndarray, ratio_cap: float = 20.0,
                                       absolute_cap: int = 50_000) -> dict:
-    """คำนวณ sampling_strategy แบบจำกัดเพดาน แทนการใช้ SMOTE ค่า default ('auto') ที่จะพยายาม
-    oversample ทุก minority class ให้เท่ากับ majority class เป๊ะ
+    """Compute a capped sampling_strategy instead of SMOTE's default ('auto'), which would try
+    to oversample every minority class up to exactly the majority-class size.
 
-    ปัญหาของ default 'auto' บนข้อมูลจริงที่ imbalance รุนแรงมาก (เช่น CIC-IDS2017 ที่ BENIGN
-    ~2.27 ล้านแถว เทียบกับ Heartbleed แค่ 11 แถว = อัตราส่วน ~206,000:1) คือ SMOTE จะพยายามสร้าง
-    ตัวอย่างสังเคราะห์ของ Heartbleed ขึ้นมาถึง ~2.27 ล้านแถวจากต้นฉบับแค่ 11 แถว ซึ่ง:
-      1. ไม่สมเหตุสมผลทางสถิติ (สร้างจาก neighbor แค่ไม่กี่จุดซ้ำๆ นับแสนรอบ)
-      2. ทำให้ dataset หลัง resample บวมขึ้นมหาศาล (รวมทุก class อาจแตะหลักสิบล้านแถว)
-         กิน RAM/VRAM และเวลาฝึกจนไม่สามารถรันจบได้จริงในทางปฏิบัติ
+    The problem with 'auto' on severely imbalanced real data (e.g. CIC-IDS2017 with BENIGN
+    ~2.27M rows versus Heartbleed at just 11 rows = ratio ~206,000:1) is that SMOTE would try to
+    synthesise ~2.27M Heartbleed samples from just 11 originals, which:
+      1. is statistically unsound (generated from a few neighbours repeated hundreds of thousands of times);
+      2. inflates the resampled dataset enormously (all classes together could reach tens of millions of rows),
+         consuming RAM/VRAM and training time until it cannot finish in practice.
 
-    แนวทางนี้จำกัดไว้ 2 ชั้น: (1) oversample แต่ละ minority class ได้ไม่เกิน ratio_cap เท่า
-    ของจำนวนตัวอย่างเดิมของ class นั้น (ป้องกันการขยายจากฐานที่เล็กเกินไป) และ (2) ไม่เกิน
-    absolute_cap แถวต่อ class ไม่ว่ากรณีใด (ป้องกัน dataset บวมเกินจน RAM/VRAM รับไม่ไหว)
-    class ที่มีจำนวนมากกว่าเพดานอยู่แล้วจะไม่ถูกแตะต้อง (SMOTE oversample อย่างเดียว ไม่ลด)
+    This approach caps in two ways: (1) each minority class is oversampled by at most ratio_cap times
+    its original count (preventing expansion from too small a base), and (2) never exceeds
+    absolute_cap rows per class under any circumstances (preventing dataset blow-up beyond RAM/VRAM).
+    Classes already above the cap are left untouched (SMOTE only oversamples, never reduces).
     """
     classes, counts = np.unique(y_train, return_counts=True)
     majority_count = counts.max()
     strategy = {}
     for cls, count in zip(classes, counts):
         target = min(count * ratio_cap, absolute_cap, majority_count)
-        if target > count:  # ระบุใน strategy เฉพาะ class ที่จะ oversample จริง (target > ของเดิม)
+        if target > count:  # only list classes that will actually be oversampled (target > original)
             strategy[int(cls)] = int(target)
     return strategy
 
@@ -74,9 +74,9 @@ def compute_capped_sampling_strategy(y_train: np.ndarray, ratio_cap: float = 20.
 def _safe_smote(X_train, y_train, random_state=42, **smote_kwargs):
     strategy = compute_capped_sampling_strategy(y_train)
     if not strategy:
-        # ไม่มี class ไหนต้อง oversample เลย (เช่นข้อมูลสมดุลอยู่แล้ว หรือทุก class เกิน cap แล้ว)
+        # no class needs oversampling (already balanced, or all classes already above the cap)
         return X_train, y_train
-    # k_neighbors ต้องไม่เกิน (จำนวนตัวอย่างของ class ที่เล็กที่สุดที่จะ oversample - 1)
+    # k_neighbors must not exceed (smallest oversampled class count - 1)
     min_class_count = min(np.sum(y_train == cls) for cls in strategy)
     k_neighbors = max(1, min(5, min_class_count - 1))
     sm = SMOTE(sampling_strategy=strategy, random_state=random_state, k_neighbors=k_neighbors, **smote_kwargs)
@@ -85,9 +85,9 @@ def _safe_smote(X_train, y_train, random_state=42, **smote_kwargs):
 
 def baseline_smote(X_train: np.ndarray, y_train: np.ndarray, n_classes: int,
                     random_state: int = 42) -> Tuple[np.ndarray, np.ndarray, Callable]:
-    """เทคนิคเดิม (ของ paper ต้นฉบับ) — ใช้เป็นจุดอ้างอิงหลักที่ต้องเอาชนะให้ได้
-    ใช้ capped sampling strategy แทน 'auto' ตรงๆ เพื่อป้องกันปัญหา oversample เกินจริงบนข้อมูล
-    ที่ imbalance รุนแรงมาก (ดู docstring ของ compute_capped_sampling_strategy)"""
+    """The original technique (from the source paper) - the primary baseline to beat.
+    Uses the capped sampling strategy rather than 'auto' to prevent over-oversampling on data
+    with extreme imbalance (see the compute_capped_sampling_strategy docstring)."""
     X_res, y_res = _safe_smote(X_train, y_train, random_state=random_state)
     loss_fn = nn.CrossEntropyLoss()
     return X_res, y_res, loss_fn
@@ -95,7 +95,7 @@ def baseline_smote(X_train: np.ndarray, y_train: np.ndarray, n_classes: int,
 
 def cost_sensitive(X_train: np.ndarray, y_train: np.ndarray, n_classes: int,
                     random_state: int = 42) -> Tuple[np.ndarray, np.ndarray, Callable]:
-    """ไม่ resample ข้อมูล แต่ปรับ loss ให้ให้น้ำหนัก minority class มากขึ้น"""
+    """Does not resample; instead reweights the loss to favour minority classes."""
     y_tensor = torch.as_tensor(y_train, dtype=torch.long)
     weights = compute_class_weights(y_tensor, n_classes)
     loss_fn = nn.CrossEntropyLoss(weight=weights)
@@ -114,12 +114,12 @@ def focal_loss_method(X_train: np.ndarray, y_train: np.ndarray, n_classes: int,
 def hybrid_resample(X_train: np.ndarray, y_train: np.ndarray, n_classes: int,
                      method: str = "smote_tomek",
                      random_state: int = 42) -> Tuple[np.ndarray, np.ndarray, Callable]:
-    """SMOTE-Tomek (oversample + clean overlap ด้วย Tomek links) หรือ ADASYN
-    (สร้างตัวอย่างมากขึ้นตรงบริเวณที่ classifier แยกยาก) ร่วมกับ cost-sensitive loss
-    ใช้ capped sampling strategy เดียวกับ baseline_smote เพื่อป้องกัน dataset บวมเกินจริง
-    และ cap majority class ก่อนเสมอ เพื่อป้องกัน Tomek-link/ADASYN ค้างนานผิดปกติบนข้อมูลจริง
-    ขนาดหลักล้านแถว (ดู cap_majority_classes)"""
-    # cap majority class ก่อนเสมอ ไม่ว่าจะเลือก method ไหน (ป้องกันปัญหาความเร็วที่ต้นตอ)
+    """SMOTE-Tomek (oversample + clean overlap with Tomek links) or ADASYN
+    (generates more samples where the classifier struggles) combined with cost-sensitive loss.
+    Uses the same capped sampling strategy as baseline_smote to prevent dataset blow-up,
+    and always caps the majority class first to prevent Tomek-link/ADASYN from stalling on real data
+    with millions of rows (see cap_majority_classes)."""
+    # always cap the majority class first, whichever method is chosen (fixes the speed issue at its source)
     X_train, y_train = cap_majority_classes(X_train, y_train, max_class_size=100_000,
                                              random_state=random_state)
 
@@ -139,7 +139,7 @@ def hybrid_resample(X_train: np.ndarray, y_train: np.ndarray, n_classes: int,
         sampler = ADASYN(sampling_strategy=strategy, random_state=random_state, n_neighbors=n_neighbors)
         X_res, y_res = sampler.fit_resample(X_train, y_train)
     else:
-        raise ValueError(f"ไม่รู้จัก method={method}")
+        raise ValueError(f"unknown method={method}")
 
     y_tensor = torch.as_tensor(y_res, dtype=torch.long)
     weights = compute_class_weights(y_tensor, n_classes)
@@ -148,12 +148,12 @@ def hybrid_resample(X_train: np.ndarray, y_train: np.ndarray, n_classes: int,
 
 
 class GANOversampler:
-    """STUB — โครงสร้างเตรียมไว้สำหรับพัฒนาเพิ่มตาม timeline เดือน 5-6
+    """STUB - scaffold prepared for future development per the month 5-6 timeline.
 
-    แนวทางที่แนะนำ: ใช้ library `ctgan` หรือ `sdv` (Synthetic Data Vault) ฝึก Conditional
-    GAN แยกเฉพาะ minority-class rows แล้ว sample สร้างตัวอย่างสังเคราะห์เพิ่ม
-    ข้อดีกว่า SMOTE เชิงเรขาคณิต: จับ non-linear joint distribution ของ feature ได้ดีกว่า
-    ตัวอย่างการต่อยอด (pseudo-code):
+    Suggested approach: use the `ctgan` or `sdv` (Synthetic Data Vault) library to train a Conditional
+    GAN on minority-class rows only, then sample synthetic examples from it.
+    Advantage over geometric SMOTE: better captures the non-linear joint distribution of features.
+    Example extension (pseudo-code):
 
         from ctgan import CTGAN
         minority_df = train_df[train_df[label_col] == minority_class]
@@ -165,8 +165,8 @@ class GANOversampler:
     def __init__(self, epochs: int = 300):
         self.epochs = epochs
         raise NotImplementedError(
-            "GANOversampler ยังไม่ implement เต็มรูปแบบ — ติดตั้ง `ctgan` แล้วพัฒนาต่อ "
-            "ตาม docstring ด้านบน ก่อนใช้งานจริงในเดือน 5-6 ของแผนงาน"
+            "GANOversampler is not fully implemented yet - install `ctgan` and extend it "
+            "per the docstring above before real use in months 5-6 of the plan."
         )
 
 
@@ -175,5 +175,5 @@ TECHNIQUES = {
     "cost_sensitive": cost_sensitive,
     "focal_loss": focal_loss_method,
     "hybrid_resample": hybrid_resample,
-    # "gan_oversample": GANOversampler  # เปิดใช้เมื่อพัฒนาเสร็จ
+    # "gan_oversample": GANOversampler  # enable once implemented
 }

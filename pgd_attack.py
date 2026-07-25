@@ -1,9 +1,9 @@
 """
 pgd_attack.py
 
-Extends the RQ4 adversarial-robustness evaluation (Section 6.4 of the manuscript) with
+Extends the RQ4 adversarial-robustness evaluation with
 Projected Gradient Descent (PGD), a stronger multi-step white-box attack. This addresses
-the limitation noted in Section 7.3 that only single-step FGSM was tested.
+the limitation noted in the main experiment that only single-step FGSM was tested.
 
 Design decisions:
 1. Same domain constraint as the FGSM experiment: port-type features are locked via
@@ -11,7 +11,7 @@ Design decisions:
    may be perturbed.
 2. FGSM and PGD are evaluated on the SAME trained models within this single run, so the
    FGSM-vs-PGD comparison is free of cross-run seeding variance (the caveat raised for
-   Section 6.5 in Section 7.3). Global seeds are also fixed explicitly.
+   the main experiment). Global seeds are also fixed explicitly.
 3. Same protocol as adversarial_robustness.py: 75/25 stratified split (random_state=42),
    150 training epochs, epsilon in {0.1, 0.3, 0.5, 1.0} standardized units, and
    adversarial training performed at epsilon_train=0.3.
@@ -34,6 +34,19 @@ import random
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
+matplotlib.rcParams.update({
+    "figure.dpi": 150,
+    "savefig.dpi": 1200,
+    "font.size": 13,
+    "axes.titlesize": 14,
+    "axes.labelsize": 13,
+    "xtick.labelsize": 11,
+    "ytick.labelsize": 11,
+    "legend.fontsize": 11,
+    "axes.linewidth": 1.1,
+    "savefig.bbox": "tight",
+})
+
 import matplotlib.pyplot as plt
 import torch
 from sklearn.model_selection import train_test_split
@@ -48,7 +61,7 @@ except ImportError:
     DATASET_PATHS = {}
 
 EPSILON_LIST = [0.1, 0.3, 0.5, 1.0]
-# NOTE: training uses epochs=150 to match the Section 6.4 (FGSM) protocol exactly,
+# NOTE: training uses epochs=150 to match the main experiment (FGSM) protocol exactly,
 # not the EPOCHS=100 used by the RQ1 cross-validation experiments.
 GLOBAL_SEED = 42
 
@@ -104,7 +117,7 @@ def evaluate_attack(model, X, y, epsilon_list, perturb_mask, loss_fn, attack_nam
 
     Returns the same structure as evaluate_robust_accuracy in adversarial_robustness.py
     (clean_accuracy + per-epsilon robust_accuracy / attack_success_rate) so downstream
-    reporting is directly comparable with the Section 6.4 tables.
+    reporting is directly comparable with the main experiment tables.
     """
     device = next(model.parameters()).device
     results = {}
@@ -169,7 +182,8 @@ def plot_results(all_results, epsilon_list, n_steps, fig_path):
     axes[1].grid(alpha=0.3)
     axes[1].legend(fontsize=8)
     plt.tight_layout()
-    plt.savefig(fig_path, dpi=150)
+    plt.savefig(fig_path, dpi=1200)
+    plt.savefig(fig_path.replace(".png", ".pdf"))
     plt.close()
 
 

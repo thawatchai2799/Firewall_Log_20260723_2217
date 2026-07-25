@@ -1,17 +1,17 @@
 """
 focal_loss_gamma_sweep.py
 
-การทดลองต่อยอด (ข้อ 3 ที่เคยเสนอไว้): ค้นหาว่าค่า focusing parameter gamma ของ focal loss
-ที่เหมาะสมกับข้อมูล firewall log ที่ไม่สมดุลรุนแรง ควรเป็นเท่าไหร่ แทนที่จะใช้ค่า default
-gamma=2.0 (ซึ่งออกแบบมาสำหรับ object detection) ที่ผลการทดลองหลักพบว่าให้ผลแย่ที่สุดในทุก
-dataset โดยไม่มีหลักฐานรองรับว่าเป็นเพราะค่า gamma ไม่เหมาะ หรือเป็นข้อจำกัดของ focal loss เอง
+Follow-up experiment (item 3 proposed earlier): find the focusing parameter gamma of focal loss
+best suited to severely imbalanced firewall log data, instead of the default gamma=2.0 (designed
+for object detection) that the main experiments found to perform worst on every dataset, without
+evidence on whether that was due to an unsuitable gamma or an inherent limitation of focal loss.
 
-ทดสอบ gamma = 0.5, 1, 2 (baseline เดิม), 5 บน Dataset A (Ertam & Kaya) ด้วย stratified
-5-fold cross-validation แบบเดียวกับการทดลองหลัก (Section 6.1 ของบทความ) เพื่อให้เทียบผลกันได้
-ตรงๆ พร้อมทดสอบนัยสำคัญทางสถิติ (Wilcoxon) และ effect size (Cohen's d) ระหว่าง gamma ที่ดี
-ที่สุดกับ gamma=2.0 เดิม
+Tests gamma = 0.5, 1, 2 (the original baseline), 5 on Dataset A (Ertam & Kaya) with stratified
+5-fold cross-validation identical to the main experiment, for a direct
+comparison, plus a statistical significance test (Wilcoxon) and effect size (Cohen's d) between the
+best gamma and the original gamma=2.0.
 
-ใช้งาน:
+Usage:
     python focal_loss_gamma_sweep.py --dataset ertam_kaya --path /path/to/log2.csv
 """
 
@@ -23,6 +23,19 @@ import os
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
+matplotlib.rcParams.update({
+    "figure.dpi": 150,
+    "savefig.dpi": 1200,
+    "font.size": 13,
+    "axes.titlesize": 14,
+    "axes.labelsize": 13,
+    "xtick.labelsize": 11,
+    "ytick.labelsize": 11,
+    "legend.fontsize": 11,
+    "axes.linewidth": 1.1,
+    "savefig.bbox": "tight",
+})
+
 import matplotlib.pyplot as plt
 from scipy.stats import wilcoxon
 from sklearn.model_selection import StratifiedKFold
@@ -33,7 +46,7 @@ from data_loader import load_dataset
 from imbalance_methods import focal_loss_method
 from run_full_experiment import train_and_eval_fold, HIDDEN_SIZE, BATCH_SIZE, LEARNING_RATE, EPOCHS
 
-GAMMA_VALUES = [0.5, 1.0, 2.0, 5.0]   # 2.0 = ค่า default เดิมที่ใช้ในผลการทดลองหลัก (Table 5)
+GAMMA_VALUES = [0.5, 1.0, 2.0, 5.0]   # 2.0 = the original default used in the main results
 N_FOLDS = 5
 
 
@@ -44,7 +57,7 @@ def cohend(m1, s1, n1, m2, s2, n2):
 
 def main(dataset_key, path, feature_names_csv, output_dir):
     os.makedirs(output_dir, exist_ok=True)
-    print(f"[1/3] โหลดข้อมูล {dataset_key} จาก {path}")
+    print(f"[1/3] Loading data {dataset_key} from {path}")
     X_df, y_raw, spec = load_dataset(dataset_key, path, feature_names_csv=feature_names_csv)
     X_df = X_df.fillna(X_df.median(numeric_only=True)).fillna(0)
 
@@ -54,14 +67,14 @@ def main(dataset_key, path, feature_names_csv, output_dir):
     n_classes = len(class_names)
     X = X_df.values
 
-    # ใช้ fold เดียวกับการทดลองหลัก (random_state=42) เพื่อให้เทียบกับ Table 5 ได้ตรงๆ
+    # use the same folds as the main experiment (random_state=42) for a direct comparison with the main results
     skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=42)
     folds = list(skf.split(X, y))
 
-    print(f"[2/3] ทดสอบ focal loss ที่ gamma = {GAMMA_VALUES} บน {N_FOLDS}-fold CV")
+    print(f"[2/3] Testing focal loss at gamma = {GAMMA_VALUES} with {N_FOLDS}-fold CV")
     results_by_gamma = {}
     for gamma in GAMMA_VALUES:
-        print(f"  กำลังทดสอบ gamma={gamma}")
+        print(f"  testing gamma={gamma}")
         fold_macro_f1 = []
         fold_per_class_f1 = []
         for fold_idx, (train_idx, val_idx) in enumerate(folds):
@@ -93,7 +106,7 @@ def main(dataset_key, path, feature_names_csv, output_dir):
             "class_names": class_names,
         }
 
-    print("[3/3] เปรียบเทียบ gamma ที่ดีที่สุดกับ gamma=2.0 (ค่า default เดิม) ทางสถิติ")
+    print("[3/3] Statistically comparing the best gamma against gamma=2.0 (the original default)")
     best_gamma = max(GAMMA_VALUES, key=lambda g: results_by_gamma[g]["mean_macro_f1"])
     baseline_gamma = 2.0
     comparisons = {}
@@ -108,12 +121,12 @@ def main(dataset_key, path, feature_names_csv, output_dir):
         comparisons[f"gamma_{best_gamma}_vs_gamma_{baseline_gamma}"] = {
             "wilcoxon_statistic": float(stat), "wilcoxon_p": float(pval), "cohens_d": float(d),
         }
-        print(f"  gamma={best_gamma} (ดีที่สุด) vs gamma={baseline_gamma} (default เดิม): "
+        print(f"  gamma={best_gamma} (best) vs gamma={baseline_gamma} (original default): "
               f"Wilcoxon p={pval:.4f}, Cohen's d={d:.3f}")
     else:
-        print(f"  gamma=2.0 (ค่า default เดิม) ยังคงเป็นค่าที่ดีที่สุดในบรรดาที่ทดสอบ ไม่มีอะไรต้องเทียบเพิ่ม")
+        print(f"  gamma=2.0 (the original default) is still the best of those tested; nothing further to compare")
 
-    # กราฟเปรียบเทียบ macro-F1 และ per-class F1 ตามค่า gamma
+    # plot comparing macro-F1 and per-class F1 across gamma values
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
     means = [results_by_gamma[g]["mean_macro_f1"] for g in GAMMA_VALUES]
     stds = [results_by_gamma[g]["std_macro_f1"] for g in GAMMA_VALUES]
@@ -136,7 +149,8 @@ def main(dataset_key, path, feature_names_csv, output_dir):
     axes[1].grid(axis="y", alpha=0.3)
     plt.tight_layout()
     fig_path = os.path.join(output_dir, "fig_focal_loss_gamma_sweep.png")
-    plt.savefig(fig_path, dpi=150)
+    plt.savefig(fig_path, dpi=1200)
+    plt.savefig(fig_path.replace(".png", ".pdf"))
     plt.close()
 
     output = {
@@ -149,11 +163,11 @@ def main(dataset_key, path, feature_names_csv, output_dir):
     out_path = os.path.join(output_dir, "focal_loss_gamma_sweep_results.json")
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
-    print(f"\nบันทึกผลลัพธ์ที่ {out_path}")
-    print(f"บันทึกกราฟที่ {fig_path}")
-    print(f"\nสรุป: gamma ที่ดีที่สุดคือ {best_gamma} "
+    print(f"\nSaved results to {out_path}")
+    print(f"Saved figure to {fig_path}")
+    print(f"\nSummary: best gamma is {best_gamma} "
           f"(macro-F1={results_by_gamma[best_gamma]['mean_macro_f1']:.4f}) "
-          f"เทียบกับ gamma=2.0 เดิม (macro-F1={results_by_gamma[2.0]['mean_macro_f1']:.4f})")
+          f"versus the original gamma=2.0 (macro-F1={results_by_gamma[2.0]['mean_macro_f1']:.4f})")
 
 
 if __name__ == "__main__":

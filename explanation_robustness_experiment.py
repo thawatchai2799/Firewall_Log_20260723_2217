@@ -1,25 +1,25 @@
 """
 explanation_robustness_experiment.py
 
-ทดสอบสิ่งที่หัวข้อ 7.2 ของบทความระบุไว้ว่า "ยังไม่ได้ทำ": ตรวจสอบว่าคำอธิบาย SHAP
-เสถียรแค่ไหนภายใต้ (1) การโจมตีแบบปรปักษ์ และ (2) การทำ adversarial training
+Tests what this study flagged as "not yet done": how stable SHAP explanations
+are under (1) adversarial attack and (2) adversarial training.
 
-เปรียบเทียบ 3 เงื่อนไข บนตัวอย่าง background/explain ชุดเดียวกันทุกเงื่อนไข (เพื่อให้เทียบกันได้
-อย่างยุติธรรม ไม่ปนกับความแปรปรวนจากการสุ่มตัวอย่างต่างกัน):
+Compares three conditions on the same background/explain samples throughout (for a fair
+comparison, free of variance from different random samples):
 
-  1. standard_clean      : โมเดลมาตรฐาน, input ปกติ (ไม่ถูกรบกวน)
-  2. standard_perturbed  : โมเดลมาตรฐาน (ตัวเดิม), input ที่ถูกโจมตีด้วย FGSM ที่ ε=0.3
-                           (เดียวกับที่ใช้ตอน adversarial training ใน Section 4.6/6.4)
-  3. adversarial_clean   : โมเดลที่ผ่าน adversarial training, input ปกติ (ไม่ถูกรบกวน)
+  1. standard_clean      : standard model, clean input (unperturbed)
+  2. standard_perturbed  : the same standard model, input attacked with FGSM at epsilon=0.3
+                           (the same as used during adversarial training in the main experiment)
+  3. adversarial_clean   : adversarially trained model, clean input (unperturbed)
 
-การเปรียบเทียบ (1)-(2) ตอบคำถาม "explanation เปลี่ยนไปหรือไม่เมื่อโดนโจมตี" (explainability
-drift ตาม Rajhans & Khawarey [25])
-การเปรียบเทียบ (1)-(3) ตอบคำถาม "การทำ robust training เปลี่ยนสิ่งที่โมเดลใช้ตัดสินใจหรือไม่"
+Comparison (1)-(2) answers "does the explanation change under attack?" (explainability
+drift, per Rajhans & Khawarey [25]).
+Comparison (1)-(3) answers "does robust training change what the model relies on?"
 
-วัด drift ด้วย 3 ตัวชี้วัด: Spearman rank correlation ของอันดับความสำคัญคุณลักษณะ,
-cosine similarity ของ importance vector, และ top-1/top-3 feature overlap
+Drift is measured with three metrics: Spearman rank correlation of feature-importance
+rankings, cosine similarity of the importance vectors, and top-1/top-3 feature overlap.
 
-ใช้งาน:
+Usage:
     python explanation_robustness_experiment.py --dataset ertam_kaya --path /path/to/log2.csv
 """
 
@@ -34,6 +34,19 @@ import torch
 import torch.nn as nn
 import matplotlib
 matplotlib.use("Agg")
+matplotlib.rcParams.update({
+    "figure.dpi": 150,
+    "savefig.dpi": 1200,
+    "font.size": 13,
+    "axes.titlesize": 14,
+    "axes.labelsize": 13,
+    "xtick.labelsize": 11,
+    "ytick.labelsize": 11,
+    "legend.fontsize": 11,
+    "axes.linewidth": 1.1,
+    "savefig.bbox": "tight",
+})
+
 import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
 from sklearn.model_selection import train_test_split
@@ -48,15 +61,15 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 HIDDEN_SIZE = 200
 LEARNING_RATE = 1e-3
 EPOCHS = 150
-EPSILON = 0.3           # ระดับ perturbation เดียวกับที่ใช้ตอน adversarial training ใน Section 4.6
+EPSILON = 0.3           # same perturbation level used during adversarial training in the main experiment
 N_BACKGROUND = 50
 N_EXPLAIN = 100
 
 
 def train_model(X_train, y_train, n_features, n_classes, adversarial, perturb_mask):
-    """ฝึกโมเดลมาตรฐาน (adversarial=False) หรือโมเดลที่ผ่าน adversarial training
-    (adversarial=True) — โครงสร้างเหมือนกับที่ใช้ใน run_adversarial_unit ของ
-    run_full_experiment.py ทุกประการ เพื่อให้โมเดลที่ได้เทียบเคียงกับผลใน Table 8 ได้ตรงๆ"""
+    """Train a standard model (adversarial=False) or an adversarially trained model
+    (adversarial=True). The structure is identical to run_adversarial_unit in
+    run_full_experiment.py, so the resulting models are directly comparable with the main results."""
     model = FirewallMLP(n_features=n_features, n_classes=n_classes, hidden_size=HIDDEN_SIZE).to(DEVICE)
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
     loss_fn = nn.CrossEntropyLoss()
@@ -87,15 +100,15 @@ def make_predict_proba(model):
 
 
 def global_importance_vector(shap_values, n_classes):
-    """รวม mean(|SHAP value|) ข้ามทุก class ให้เหลือ vector เดียวความยาว n_features
-    (เหมือนความยาวรวมของแท่งใน summary_plot type='bar') ใช้เป็นตัวแทน 'อันดับความสำคัญ
-    ของคุณลักษณะในภาพรวม' สำหรับเปรียบเทียบ 3 เงื่อนไข"""
+    """Sum mean(|SHAP value|) across all classes into a single vector of length n_features
+    (like the total bar lengths in summary_plot type='bar'), used as a proxy for the
+    'overall feature-importance ranking' when comparing the three conditions."""
     if isinstance(shap_values, list):
         stacked = np.stack(shap_values, axis=0)  # (n_classes, n_samples, n_features)
     else:
         stacked = np.transpose(shap_values, (2, 0, 1))  # -> (n_classes, n_samples, n_features)
     per_class_mean_abs = np.mean(np.abs(stacked), axis=1)  # (n_classes, n_features)
-    return per_class_mean_abs.sum(axis=0)  # (n_features,) รวมทุก class
+    return per_class_mean_abs.sum(axis=0)  # (n_features,) summed over all classes
 
 
 def compare_importance(vec_a, vec_b, feature_names, label_a, label_b):
@@ -118,7 +131,7 @@ def compare_importance(vec_a, vec_b, feature_names, label_a, label_b):
 
 def main(dataset_key, path, feature_names_csv, output_dir):
     os.makedirs(output_dir, exist_ok=True)
-    print(f"[1/6] โหลดข้อมูล {dataset_key} จาก {path}")
+    print(f"[1/6] Loading data {dataset_key} from {path}")
     X_df, y_raw, spec = load_dataset(dataset_key, path, feature_names_csv=feature_names_csv)
     X_df = X_df.fillna(X_df.median(numeric_only=True)).fillna(0)
     feature_names = X_df.columns.tolist()
@@ -136,7 +149,7 @@ def main(dataset_key, path, feature_names_csv, output_dir):
 
     perturb_mask = np.array([1.0 if f in PERTURBABLE_FEATURES else 0.0 for f in feature_names])
 
-    print("[2/6] ฝึกโมเดลมาตรฐาน (standard) และโมเดลที่ผ่าน adversarial training")
+    print("[2/6] Training the standard model and the adversarially trained model")
     X_res, y_res, _ = baseline_smote(X_train, y_train, n_classes)
     model_standard = train_model(X_res, y_res, X_train.shape[1], n_classes, adversarial=False, perturb_mask=perturb_mask)
     model_adversarial = train_model(X_res, y_res, X_train.shape[1], n_classes, adversarial=True, perturb_mask=perturb_mask)
@@ -145,16 +158,16 @@ def main(dataset_key, path, feature_names_csv, output_dir):
     acc_adversarial = (make_predict_proba(model_adversarial)(X_test).argmax(axis=1) == y_test).mean()
     print(f"      clean accuracy: standard={acc_standard:.4f}, adversarial-trained={acc_adversarial:.4f}")
 
-    print("[3/6] เตรียมตัวอย่าง background/explain ชุดเดียวกันสำหรับทุกเงื่อนไข")
+    print("[3/6] Preparing the same background/explain samples for every condition")
     background = shap.sample(X_train, N_BACKGROUND, random_state=42)
     explain_clean = X_test[:N_EXPLAIN].copy()
 
-    print("[4/6] สร้างตัวอย่างปรปักษ์จาก explain set เดียวกัน (ε=0.3, ใช้ gradient ของโมเดลมาตรฐาน)")
+    print("[4/6] Building adversarial examples from the same explain set (epsilon=0.3, standard-model gradients)")
     loss_fn = nn.CrossEntropyLoss()
     explain_perturbed = fgsm_attack(model_standard, loss_fn, explain_clean,
                                      y_test[:N_EXPLAIN], EPSILON, perturb_mask)
 
-    print("[5/6] คำนวณ SHAP ทั้ง 3 เงื่อนไข (อาจใช้เวลาหลายนาทีต่อเงื่อนไข)")
+    print("[5/6] Computing SHAP for all three conditions (may take several minutes per condition)")
     results = {}
     conditions = [
         ("standard_clean", model_standard, explain_clean),
@@ -163,7 +176,7 @@ def main(dataset_key, path, feature_names_csv, output_dir):
     ]
     importance_vectors = {}
     for name, model, sample in conditions:
-        print(f"      กำลังคำนวณ SHAP: {name}")
+        print(f"      computing SHAP: {name}")
         explainer = shap.KernelExplainer(make_predict_proba(model), background)
         raw_shap = explainer.shap_values(sample, nsamples=100)
         shap_values = raw_shap if isinstance(raw_shap, list) else \
@@ -175,10 +188,11 @@ def main(dataset_key, path, feature_names_csv, output_dir):
                            class_names=class_names, plot_type="bar", show=False)
         plt.title(f"Global Feature Importance \u2014 {name} ({dataset_key})")
         plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, f"shap_explanation_robustness_{name}.png"), dpi=150)
+        plt.savefig(os.path.join(output_dir, f"shap_explanation_robustness_{name}.png"), dpi=1200)
+        plt.savefig(os.path.join(output_dir, f"shap_explanation_robustness_{name}.pdf"), dpi=1200)
         plt.close()
 
-    print("[6/6] เปรียบเทียบ drift ระหว่างเงื่อนไข")
+    print("[6/6] Comparing drift between conditions")
     comparisons = [
         compare_importance(importance_vectors["standard_clean"], importance_vectors["standard_perturbed"],
                             feature_names, "standard_clean", "standard_perturbed"),
@@ -192,7 +206,7 @@ def main(dataset_key, path, feature_names_csv, output_dir):
               f"cosine={c['cosine_similarity']:.3f}, top1 same={c['top1_same']}, "
               f"top3 overlap={c['top3_overlap_count']}/3")
 
-    # กราฟเปรียบเทียบ importance ranking แบบเห็นภาพรวมทีเดียว (grouped bar ของ 3 เงื่อนไข)
+    # single grouped-bar plot comparing the importance ranking across the three conditions
     fig, ax = plt.subplots(figsize=(9, 5))
     x = np.arange(len(feature_names))
     width = 0.27
@@ -207,7 +221,8 @@ def main(dataset_key, path, feature_names_csv, output_dir):
     ax.set_title(f"Explanation-Robustness Comparison ({dataset_key})")
     ax.legend()
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "fig_explanation_robustness_comparison.png"), dpi=150)
+    plt.savefig(os.path.join(output_dir, "fig_explanation_robustness_comparison.png"), dpi=1200)
+    plt.savefig(os.path.join(output_dir, "fig_explanation_robustness_comparison.pdf"), dpi=1200)
     plt.close()
 
     output = {
@@ -221,8 +236,8 @@ def main(dataset_key, path, feature_names_csv, output_dir):
     out_path = os.path.join(output_dir, "explanation_robustness_results.json")
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)
-    print(f"\nบันทึกผลลัพธ์ที่ {out_path}")
-    print(f"บันทึกกราฟที่ {output_dir}/fig_explanation_robustness_comparison.png และ shap_explanation_robustness_*.png")
+    print(f"\nSaved results to {out_path}")
+    print(f"Saved figures to {output_dir}/fig_explanation_robustness_comparison.png and shap_explanation_robustness_*.png")
 
 
 if __name__ == "__main__":

@@ -1,13 +1,13 @@
 """
 shap_hard_classes.py
 
-Extends the RQ3 SHAP analysis (Section 6.3.2 of the manuscript) from the Analysis class
+Extends the RQ3 SHAP analysis from the Analysis class
 to the classes that are genuinely hardest on real data: Worms (F1=0.072) and Backdoors
-(F1=0.080), per Table 7. This addresses the Section 7.3 observation that all three
+(F1=0.080), in the main results. This addresses the observation that all three
 severely underperforming classes merit comparative SHAP profiling rather than treating
 Analysis as representative.
 
-Protocol (identical to Section 4.5 of the manuscript):
+Protocol (identical to this study):
 - SHAP KernelExplainer over the model's softmax probabilities
 - Background set: 50 samples randomly drawn from the training set
 - Up to 100 test-set samples of each target class are explained (Worms has only ~44
@@ -15,10 +15,10 @@ Protocol (identical to Section 4.5 of the manuscript):
 - Global level: mean(|SHAP|) per feature for the target-class output
 - Local level: force plot for one instance per target class (a correctly classified
   instance if one exists; otherwise a misclassified one, which is flagged in the JSON
-  output and is itself diagnostically interesting, as in Fig. 7 of the manuscript)
+  output and is itself diagnostically interesting, as in Fig. 7 of this study)
 
 The explained model is trained with the baseline (SMOTE) technique, consistent with
-Section 6.3. Because SMOTE plus 150-epoch training on the full 2.5M-row UNSW-NB15
+the main experiment. Because SMOTE plus 150-epoch training on the full 2.5M-row UNSW-NB15
 training split is expensive, --max_train_samples allows a stratified subsample for the
 model-training step (minority classes are always kept in full). Use 0 for the full
 training split.
@@ -36,6 +36,19 @@ import random
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
+matplotlib.rcParams.update({
+    "figure.dpi": 150,
+    "savefig.dpi": 1200,
+    "font.size": 13,
+    "axes.titlesize": 14,
+    "axes.labelsize": 13,
+    "xtick.labelsize": 11,
+    "ytick.labelsize": 11,
+    "legend.fontsize": 11,
+    "axes.linewidth": 1.1,
+    "savefig.bbox": "tight",
+})
+
 import matplotlib.pyplot as plt
 import shap
 import torch
@@ -144,7 +157,7 @@ def main(dataset_key, path, feature_names_csv, targets, output_dir, max_train_sa
                                                 max_train_samples)
     print(f"[2/4] SMOTE-resampling {len(y_train_sub):,} rows "
           f"(of {len(y_train):,} available), then training for {EPOCHS} epochs")
-    # Baseline (SMOTE) technique, consistent with the Section 6.3 protocol.
+    # Baseline (SMOTE) technique, consistent with the main experiment protocol.
     # Handle both possible signatures/returns of baseline_smote defensively.
     try:
         res = baseline_smote(X_train, y_train_sub, n_classes)
@@ -202,7 +215,8 @@ def main(dataset_key, path, feature_names_csv, targets, output_dir, max_train_sa
         plt.title(f"Global feature importance for the {target} class (Dataset C)")
         plt.tight_layout()
         summary_path = os.path.join(output_dir, f"shap_summary_C_{target.lower()}.png")
-        plt.savefig(summary_path, dpi=150)
+        plt.savefig(summary_path, dpi=1200)
+        plt.savefig(summary_path.replace(".png", ".pdf"))
         plt.close()
 
         # ---- Local: force plot for one instance ----
@@ -219,7 +233,8 @@ def main(dataset_key, path, feature_names_csv, targets, output_dir, max_train_sa
                         sv_target[local_i], X_explain[local_i],
                         feature_names=feature_names, matplotlib=True, show=False)
         local_path = os.path.join(output_dir, f"shap_local_C_{target.lower()}.png")
-        plt.savefig(local_path, dpi=150, bbox_inches="tight")
+        plt.savefig(local_path, dpi=1200, bbox_inches="tight")
+        plt.savefig(local_path.replace(".png", ".pdf"), bbox_inches="tight")
         plt.close()
 
         n_correct = int((pred_for_chosen == cls_idx).sum())

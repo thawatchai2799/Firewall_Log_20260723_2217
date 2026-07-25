@@ -1,11 +1,11 @@
 """
 pipeline.py
 
-ตัวอย่าง end-to-end pipeline: โหลด dataset -> preprocess -> stratified k-fold ->
-ฝึก MLP ด้วยแต่ละเทคนิคใน imbalance_methods.py -> รายงาน per-class F1 / macro-F1 พร้อม
-paired statistical test ระหว่างเทคนิค (ตอบ RQ1 ตาม proposal ข้อ 6)
+Example end-to-end pipeline: load dataset -> preprocess -> stratified k-fold ->
+train an MLP with each technique in imbalance_methods.py -> report per-class F1 / macro-F1 with
+paired statistical tests between techniques (answers RQ1 in the main experiment).
 
-รันตัวอย่าง:
+Example run:
     python pipeline.py --dataset ertam_kaya --path data/raw/ertam_kaya_firewall.csv \
         --techniques baseline_smote cost_sensitive focal_loss hybrid_resample \
         --folds 10 --epochs 100 --output results/
@@ -61,23 +61,23 @@ def run_comparison(dataset_key: str, path: str, technique_names, n_folds: int = 
     os.makedirs(output_dir, exist_ok=True)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    print(f"[1/5] โหลด dataset: {dataset_key}")
+    print(f"[1/5] Loading dataset: {dataset_key}")
     X_df, y_raw, spec = load_dataset(dataset_key, path, feature_names_csv=feature_names_csv)
 
     dq = report_data_quality(X_df, name=dataset_key)
     dq.to_csv(os.path.join(output_dir, f"{dataset_key}_data_quality.csv"))
 
-    # impute แบบง่าย (median) — ปรับได้ตามผล data-quality report จริง
+    # simple median imputation - adjust based on the actual data-quality report
     X_df = X_df.fillna(X_df.median(numeric_only=True))
-    X_df = X_df.fillna(0)  # กันกรณีทั้งคอลัมน์เป็น NaN (median ก็ NaN)
+    X_df = X_df.fillna(0)  # guard against an all-NaN column (median is also NaN)
 
     label_encoder = LabelEncoder()
     y = label_encoder.fit_transform(y_raw)
     n_classes = len(label_encoder.classes_)
     class_names = label_encoder.classes_.tolist()
 
-    print(f"[2/5] จำนวน class = {n_classes}: {class_names}")
-    print(f"      สัดส่วนแต่ละ class:\n{pd.Series(y_raw).value_counts(normalize=True)}")
+    print(f"[2/5] number of classes = {n_classes}: {class_names}")
+    print(f"      class proportions:\n{pd.Series(y_raw).value_counts(normalize=True)}")
 
     X = X_df.values
     n_features = X.shape[1]
@@ -87,12 +87,12 @@ def run_comparison(dataset_key: str, path: str, technique_names, n_folds: int = 
     all_results = {tech: {"per_fold_macro_f1": [], "per_fold_per_class_f1": []}
                    for tech in technique_names}
 
-    print(f"[3/5] เริ่ม {n_folds}-fold cross-validation สำหรับ {len(technique_names)} เทคนิค")
+    print(f"[3/5] starting {n_folds}-fold cross-validation for {len(technique_names)} techniques")
     for fold_idx, (train_idx, val_idx) in enumerate(skf.split(X, y)):
         X_train_raw, X_val_raw = X[train_idx], X[val_idx]
         y_train, y_val = y[train_idx], y[val_idx]
 
-        # scale หลัง split เท่านั้น (fit บน train fold อย่างเดียว กัน data leakage)
+        # scale only after the split (fit on the train fold only, to prevent data leakage)
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train_raw)
         X_val_scaled = scaler.transform(X_val_raw)
@@ -116,7 +116,7 @@ def run_comparison(dataset_key: str, path: str, technique_names, n_folds: int = 
 
             print(f"  fold {fold_idx+1}/{n_folds} | {tech_name:16s} | macro-F1={macro_f1:.4f}")
 
-    print("[4/5] สรุปผลและทดสอบ statistical significance (Wilcoxon signed-rank, pairwise)")
+    print("[4/5] summarising and testing statistical significance (Wilcoxon signed-rank, pairwise)")
     summary = {}
     for tech_name in technique_names:
         f1s = all_results[tech_name]["per_fold_macro_f1"]
@@ -139,7 +139,7 @@ def run_comparison(dataset_key: str, path: str, technique_names, n_folds: int = 
                 stat, p_value = float("nan"), float("nan")
             pairwise_tests[f"{tech_a}_vs_{tech_b}"] = {"statistic": float(stat), "p_value": float(p_value)}
 
-    print("[5/5] บันทึกผลลัพธ์")
+    print("[5/5] saving results")
     output = {"summary": summary, "pairwise_wilcoxon_tests": pairwise_tests}
     with open(os.path.join(output_dir, f"{dataset_key}_comparison_results.json"), "w", encoding="utf-8") as f:
         json.dump(output, f, ensure_ascii=False, indent=2)

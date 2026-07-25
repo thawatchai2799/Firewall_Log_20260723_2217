@@ -1,15 +1,16 @@
 """
 dataset_config.py
 
-ไฟล์ config แยกต่างหากจากตัวโค้ดหลัก (run_full_experiment.py) โดยเจตนา
+A configuration file kept deliberately separate from the main code (run_full_experiment.py).
 
-**ไฟล์นี้จะไม่ถูกแก้ไขโดยผู้พัฒนาอีกเลยไม่ว่าจะส่ง run_full_experiment.py เวอร์ชันใหม่กี่ครั้ง
-เพื่อแก้บั๊กก็ตาม** — แก้ path/ค่าตั้งต้นทั้งหมดที่ไฟล์นี้ไฟล์เดียว ปลอดภัยจากการถูก overwrite
-เวลาที่ต้องอัปเดตไฟล์โค้ดอื่นๆ (run_full_experiment.py, data_loader.py, ฯลฯ)
+**This file is never modified by the developer, no matter how many new versions of
+run_full_experiment.py are shipped to fix bugs.** Edit all paths and defaults in this one file;
+it is safe from being overwritten when the other code files (run_full_experiment.py,
+data_loader.py, etc.) are updated.
 """
 
 # =============================================================================
-# Path ของข้อมูลจริง — แก้ตรงนี้ให้ตรงกับเครื่องของคุณ
+# Real dataset paths - edit these to match your machine
 # =============================================================================
 DATASET_PATHS = {
     "ertam_kaya": {
@@ -27,17 +28,17 @@ DATASET_PATHS = {
 }
 
 # =============================================================================
-# ค่าตั้งต้นอื่นๆ ของการทดลอง (ปกติไม่ต้องแก้ เว้นแต่ต้องการปรับ)
+# Other experiment defaults (normally no need to change unless tuning)
 # =============================================================================
 TECHNIQUE_NAMES = ["baseline_smote", "cost_sensitive", "focal_loss", "hybrid_resample"]
 N_FOLDS = 5
 EPOCHS = 100
 HIDDEN_SIZE = 200
-BATCH_SIZE = 512          # mini-batch — สำคัญมากสำหรับ dataset ขนาดล้านแถวขึ้นไป
+BATCH_SIZE = 512          # mini-batch - important for datasets of a million-plus rows
 LEARNING_RATE = 1e-3
-HEARTBEAT_SECONDS = 60    # รายงานความคืบหน้าทุกกี่วินาที
+HEARTBEAT_SECONDS = 60    # how often (in seconds) to report progress
 
-SHAP_DATASETS = {         # (dataset_key -> hardest_class_name) สำหรับ SHAP analysis
+SHAP_DATASETS = {         # (dataset_key -> hardest_class_name) for SHAP analysis
     "ertam_kaya": "deny",
     "unsw_nb15": "Analysis",
 }
