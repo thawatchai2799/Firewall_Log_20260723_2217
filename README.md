@@ -1,86 +1,90 @@
-# Explainable, Cost-Sensitive Deep Learning for Extreme Class-Imbalance Firewall Log Classification
+# Extreme Class-Imbalance Firewall Log Classification: Measuring and Manipulating Class Overlap and Rarity Across Three Datasets
 
-A reproducible experimental framework for classifying firewall and network-intrusion logs under
-**extreme class imbalance**, where the security-critical classes often account for well under 1% of
-records. The framework compares imbalance-handling techniques and model families on three real
-datasets, explains predictions with SHAP, and evaluates adversarial robustness.
+Code, precomputed results and figure scripts for the paper of the same title. The study asks what
+makes a rare class hard to classify in firewall and intrusion logs, class rarity or class overlap
+in feature space, and how the answer depends on the model. It uses three public datasets (the
+Ertam & Kaya Internet Firewall Data Set, CIC-IDS2017 and UNSW-NB15), ten model–technique
+combinations trained on identical folds with fixed seeds, five data-complexity measures for all
+29 classes, controlled rarity and overlap sweeps, two protocol checks (per-class time-block folds
+and native feature sets), exact TreeSHAP attribution profiles, and a calibration analysis.
 
-## What this code does
-
-The experiments are organized around four questions:
-
-1. **Imbalance handling** — Compares four techniques (baseline SMOTE, cost-sensitive learning,
-   focal loss, hybrid SMOTE-Tomek resampling) on an identical multilayer perceptron (MLP), with
-   Wilcoxon signed-rank tests and Cohen's d effect sizes.
-2. **Cross-dataset generalization** — Checks whether the technique ranking holds across datasets
-   with different structures and class distributions, and identifies the hardest class in each.
-3. **Explainability** — Uses SHAP (global and local) to check that the model relies on
-   domain-plausible features, and to profile why the hardest classes fail.
-4. **Adversarial robustness** — Evaluates FGSM and multi-step PGD attacks under a domain-aware
-   perturbation constraint, and measures the effect of adversarial training.
-
-The framework additionally compares three **model families** — gradient-boosted trees (XGBoost,
-LightGBM), the MLP, and a deep tabular network (TabNet) — to separate effects of the imbalance
-technique from effects of the model family.
+Every number in the paper can be traced to a file in `results/`, and every figure to a script in
+`figures/` that reads only files in that folder. Nothing has to be re-trained to check the
+reported values; the sections below say how to re-run each experiment if you want to.
 
 ## Repository layout
 
 ```
 .
-├── README.md                              This file
-├── README.html                            HTML version of this file
-├── requirements.txt                       Python dependencies
-├── dataset_config.py                      EDIT THIS: dataset paths and experiment defaults
+├── README.md
+├── LICENSE
+├── requirements.txt                  Python dependencies (minimum versions)
+├── dataset_config.py                 EDIT THIS: dataset paths and training defaults
 │
-│   Core pipeline modules
-├── data_loader.py                         Loads and harmonizes the three datasets
-├── feature_schema.py                      Canonical feature schema shared across datasets
-├── imbalance_methods.py                   The four imbalance-handling techniques
-├── model.py                               The MLP architecture (FirewallMLP)
-├── pipeline.py                            Stratified k-fold training / evaluation loop
-├── adversarial_robustness.py              FGSM attack, adversarial training, robustness eval
+│   Shared modules (imported by the experiment scripts; run nothing on their own)
+├── data_loader.py                    Loads the three datasets and maps them onto the common schema
+├── feature_schema.py                 The common flow-feature schema (9 / 8 / 10 features for A / B / C)
+├── imbalance_methods.py              Capped SMOTE, cost-sensitive loss, focal loss, hybrid resampling
+├── model.py                          The MLP (two hidden layers of 200 units)
+├── pipeline.py                       Stratified k-fold training loop used by the original MLP runs
+├── tree_baselines.py                 XGBoost and LightGBM in the plain / SMOTE / class-weighted regimes
+├── run_full_experiment.py            Original MLP training loop (imported by focal_loss_gamma_sweep.py)
 │
-│   Experiment scripts
-├── run_full_experiment.py                 Main experiment (RQ1-RQ4): trains MLP, runs SHAP + FGSM
-├── tree_baselines.py                      XGBoost and LightGBM baselines (3 modes each)
-├── tabnet_baseline.py                     TabNet (deep tabular) baseline (3 modes)
-├── tune_xgb_datasetA.py                   Nested-CV hyperparameter tuning for XGBoost
-├── make_tree_vs_mlp_table.py              Merges MLP + tree + TabNet results into one table
-├── lgbm_investigation.py                  Probes why LightGBM collapses on large datasets
-├── pgd_attack.py                          Stronger multi-step PGD attack (vs. single-step FGSM)
-├── explanation_robustness_experiment.py   Measures SHAP drift under attack / adversarial training
-├── focal_loss_gamma_sweep.py              Sweeps the focal-loss focusing parameter gamma
-├── shap_hard_classes.py                   SHAP profiling of the hardest minority classes
+│   Experiments reported in the paper (in the order of the Results section)
+├── overlap_analysis.py               Section 5.1: N1, N2, N3, R, F1inv for every class            -> results/overlap/
+├── rerun_with_predictions.py         Sections 5.5-5.7: seeded re-run of all 10 combinations,
+│                                     predictions and probabilities saved                            -> results/main_comparison/
+├── paired_tests_from_rerun.py        Sections 4.3, 5.5, 5.9, 5.10: paired bootstrap / permutation tests
+│                                     of XGBoost against the MLP under each protocol                -> results/main_comparison/paired_tests.csv
+├── controlled_experiment.py          Sections 5.3-5.4: rarity sweep and overlap sweep (Dataset A)   -> results/controlled/
+├── run_extensions.py                 Sections 5.9-5.11: time-block folds, native feature sets,
+│   ├── evaluation_extensions.py        exact TreeSHAP profiles (one command, resumable)              -> results/protocol_checks/, results/shap/
+│   └── shap_overlap_profiles.py
+├── overlap_native_features.py        Section 5.10: overlap measures recomputed on native features   -> results/overlap_native/
+├── calibration_from_npz.py           Section 5.12: ECE, Brier, NLL, reliability diagrams            -> results/calibration/
 │
-├── results/                               Precomputed result files (JSON + ranked tables)
-└── figures/                               Publication figures (.png at 300 DPI and .pdf)
+│   Auxiliary analyses (reported from their original runs; see Section 6.3 of the paper)
+├── tune_xgb_datasetA.py              Nested randomised search for XGBoost on Dataset A              -> results/auxiliary/
+├── focal_loss_gamma_sweep.py         Focal-loss gamma sweep on Dataset A                            -> results/auxiliary/
+├── lgbm_investigation.py             Section 5.8: twelve-configuration LightGBM probe on Dataset B  -> results/auxiliary/
+├── collect_results.py                Fold tables and paired tests of the original (unseeded) run    -> results/original_run/
+│
+│   Scripts for analyses that are no longer in the paper (kept for the record; see below)
+├── adversarial_robustness.py, pgd_attack.py, explanation_robustness_experiment.py,
+├── tabnet_baseline.py, shap_hard_classes.py, make_tree_vs_mlp_table.py
+│
+├── results/                          Precomputed results behind every table (see "Results" below)
+└── figures/                          Figure scripts, their input files and the rendered figures
 ```
+
+All scripts import the shared modules by their bare names, so run every script from the
+repository root.
 
 ## Installation
 
-Requires Python 3.10 or newer.
+Python 3.10 or newer. A CUDA GPU is used by the MLP when available; XGBoost and LightGBM run on
+the CPU or GPU according to their own builds.
 
 ```bash
 python -m venv venv
-source venv/bin/activate        # on Windows: venv\Scripts\activate
+source venv/bin/activate            # on Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-Key dependencies: PyTorch, scikit-learn, imbalanced-learn, SHAP, XGBoost, LightGBM,
-pytorch-tabnet, matplotlib.
+`requirements.txt` gives the minimum versions. The exact versions used for the reported runs are
+listed in `requirements-frozen.txt` when present (generated with `pip freeze` on the experiment
+machine).
 
 ## Datasets
 
-The datasets are **not** included in this repository (they are large and separately licensed).
-Download them and point `dataset_config.py` at their locations:
+The datasets are not distributed with this repository. Download them and point
+`dataset_config.py` at their locations; every script reads the paths from that one file.
 
-| Key          | Dataset                              | Rows       | Source |
-|--------------|--------------------------------------|------------|--------|
-| `ertam_kaya` | Internet Firewall Data Set           | 65,532     | UCI Machine Learning Repository |
-| `cicids2017` | CIC-IDS2017 (MachineLearningCVE)     | 2,830,743  | Canadian Institute for Cybersecurity |
-| `unsw_nb15`  | UNSW-NB15                            | 2,540,047  | UNSW Canberra |
-
-Edit the paths at the top of `dataset_config.py`:
+| Key          | Dataset                                   | Records    | Classes | Source |
+|--------------|-------------------------------------------|------------|---------|--------|
+| `ertam_kaya` | Internet Firewall Data Set (`log2.csv`)   | 65,532     | 4       | UCI Machine Learning Repository / Kaggle |
+| `cicids2017` | CIC-IDS2017, MachineLearningCVE CSV files | 2,830,743  | 15      | Canadian Institute for Cybersecurity |
+| `unsw_nb15`  | UNSW-NB15, the four `UNSW-NB15_*.csv` files and `NUSW-NB15_features.csv` | 2,540,047 | 10 | UNSW Canberra Cyber |
 
 ```python
 DATASET_PATHS = {
@@ -91,70 +95,123 @@ DATASET_PATHS = {
 }
 ```
 
-All experiments read paths from this one file, so it is the only place you need to edit.
+Two label corrections are applied on loading and are described in the paper: the UNSW-NB15
+labels "Backdoor" and "Backdoors" are merged into one class, and the mis-encoded dash in the
+CIC-IDS2017 "Web Attack" labels is treated as cosmetic.
 
-## How to run
+## Reproducing the results
 
-Run scripts from the repository root (so the flat module imports resolve). Each script writes a
-JSON result file and, where applicable, figures.
+Each command below writes into its own output folder and never overwrites an earlier run; the
+long-running scripts print progress every 30 seconds with an estimated finishing time and can be
+resumed after an interruption.
 
-**Main experiment (imbalance techniques + SHAP + FGSM):**
+**Main comparison (Tables 6-9, Table 15; about 14 GPU-hours on the hardware below):**
 ```bash
-python run_full_experiment.py
+python rerun_with_predictions.py --output rerun_results
+python rerun_with_predictions.py --output rerun_results --summarize      # writes rerun_metrics.csv, rerun_per_class.csv, rerun_confusion_matrices.json
+python paired_tests_from_rerun.py --output results/main_comparison/paired_tests.csv
+```
+Dataset A is run with seeds 42, 43 and 44 and Datasets B and C with seed 42 (`--seeds` controls
+this); every unit saves its predicted labels and class probabilities as a `.npz` file.
+
+**Overlap measures (Table 3, Fig. 1; about 20 minutes):**
+```bash
+python overlap_analysis.py --all --output overlap_results
 ```
 
-**Model-family baselines:**
+**Controlled experiments (Table 5, Figs. 2-3; about 1.5 hours):**
 ```bash
-python tree_baselines.py    --dataset ertam_kaya --path path/to/log2.csv --folds 5 --output results
-python tabnet_baseline.py   --dataset ertam_kaya --path path/to/log2.csv --folds 5 --output results
-python make_tree_vs_mlp_table.py --dataset ertam_kaya --results results
+python controlled_experiment.py --dataset ertam_kaya --output controlled_results
 ```
 
-**Follow-up analyses:**
+**Protocol checks and SHAP profiles (Tables 10-13, Figs. 4-5; about 8 hours):**
 ```bash
-python tune_xgb_datasetA.py       --dataset ertam_kaya --path path/to/log2.csv
-python pgd_attack.py              --dataset ertam_kaya --path path/to/log2.csv --steps 10
-python explanation_robustness_experiment.py --dataset ertam_kaya --path path/to/log2.csv
-python focal_loss_gamma_sweep.py  --dataset ertam_kaya --path path/to/log2.csv
-python shap_hard_classes.py       --dataset unsw_nb15  --path path/to/unsw.csv --max_train_samples 400000
-python lgbm_investigation.py      --dataset cicids2017 --path path/to/MachineLearningCVE --folds 3
+python run_extensions.py --rerun_dir rerun_results --output extension_results
+python run_extensions.py --rerun_dir rerun_results --output extension_results --resume latest   # after an interruption
+python overlap_native_features.py --output overlap_native_results
+```
+`run_extensions.py` runs three stages (`shap`, `time_blocks`, `full_features`) for the three
+headline models (class-weighted XGBoost, SMOTE XGBoost, SMOTE MLP) with seed 42 on the same folds
+as the main comparison; `--stages` selects a subset. `overlap_native_features.py` recomputes the
+five overlap measures on each dataset's native feature set using the same stratified draws as
+`overlap_analysis.py`.
+
+**Calibration (Table 14, Fig. 6; a few minutes):**
+```bash
+python calibration_from_npz.py --input rerun_results --output calibration_results
 ```
 
-## Reproducibility
+**Auxiliary analyses:**
+```bash
+python tune_xgb_datasetA.py      --path path/to/log2.csv --output results
+python focal_loss_gamma_sweep.py --dataset ertam_kaya --path path/to/log2.csv
+python lgbm_investigation.py     --dataset cicids2017 --path path/to/MachineLearningCVE --folds 3 --output results
+```
 
-- All experiments use `StratifiedKFold(shuffle=True, random_state=42)` and fixed global seeds.
-- Each fold applies its own `StandardScaler` fitted only on the training split (no leakage).
-- SMOTE is applied inside each training fold, never to the validation split.
-- Result files under `results/` were produced with the configurations above and can be regenerated.
+**Self-tests.** `run_extensions.py`, `overlap_native_features.py`, `shap_overlap_profiles.py` and
+`calibration_from_npz.py` accept `--selftest`, which runs the script end to end on a small
+synthetic dataset and checks its own output. `rerun_with_predictions.py --synthetic` does the same
+for the main loop. These finish in a few minutes and need no real data.
 
-## Precomputed results
+## Results
 
-The `results/` directory contains the exact outputs used to build the figures and tables:
+`results/` holds the files from which every table in the paper was produced.
 
-| File | Contents |
-|------|----------|
-| `ertam_kaya_tree_baseline_results.json`   | XGBoost / LightGBM, 10-fold, Dataset A |
-| `ertam_kaya_tabnet_baseline_results.json` | TabNet, 5-fold, Dataset A |
-| `ertam_kaya_xgb_tuned_results.json`       | Nested-CV tuned vs. fixed XGBoost |
-| `pgd_attack_results.json`                 | FGSM + PGD robustness, both models |
-| `explanation_robustness_results.json`     | SHAP importance under three conditions |
-| `shap_hard_classes_results.json`          | SHAP profiling of Worms / Backdoors |
-| `focal_loss_gamma_sweep_results.json`     | Focal-loss gamma sweep |
-| `*_tree_vs_mlp_table.txt`                 | Ranked three-family comparison tables |
+| Folder | Contents | Paper |
+|---|---|---|
+| `results/main_comparison/` | `rerun_metrics.csv` (one row per unit: 250 units = 10 combinations × 5 folds × 1-3 seeds), `rerun_per_class.csv` (per-class precision, recall, F1, support, FP, FPR for every unit), `rerun_confusion_matrices.json`, `paired_tests.csv` (output of `paired_tests_from_rerun.py`) | Tables 6-9, 15; Sections 5.5, 5.9, 5.10 |
+| `results/original_run/` | fold scores and paired tests of the original, unseeded run that preceded the re-run (`collect_results.py` output); kept because Section 5.13 compares the two | Section 5.13 |
+| `results/overlap/` | `*_overlap_measures.csv` and `*_overlap_per_draw.json` per dataset; `table_overlap_measures_v2.csv` (29 classes with per-class F1 attached) | Table 3, Table 4, Fig. 1 |
+| `results/controlled/` | `table_overlap_controlled.csv` (the 72 overlap-sweep runs reported: the `drop` rows of run 1 and the `deny` rows of run 2), `controlled_run1_all_classes_*` (first run over all four classes; its `deny` sweep used `reset-both` as the blend partner, which the paper explains is not a valid partner), `controlled_run2_deny_*` (re-run of `deny` with `allow` as partner, after the minimum partner-pool rule was added), `table_rarity_sweep_from_log.csv` (rarity sweep; transcribed from the run's console log, as noted in its `source` column) | Table 5, Figs. 2-3 |
+| `results/protocol_checks/time_blocks/` | `metrics.csv`, `per_class.csv`, `confusion_matrices.json`, `*_split_info.json` (the ordering key used for each dataset) | Table 10, Fig. 4 |
+| `results/protocol_checks/full_features/` | `metrics.csv`, `per_class.csv`, `confusion_matrices.json`, `*_feature_info.json` (which columns were used, dropped or imputed) | Tables 10-11, Fig. 4 |
+| `results/overlap_native/` | overlap measures on the common and the native feature set, same draws | Table 12 |
+| `results/shap/` | per-class importance profiles, class summaries (attribution margin, closest rival, top feature), bootstrap stability, pair similarities, `*_shap_model_check.json` (additivity error and the match with the main run's fold-0 score), `shap_merged_29.csv` (joined with overlap and F1) | Table 13, Fig. 5 |
+| `results/calibration/` | `calibration_summary.csv`, `calibration_per_unit.csv`, `calibration_per_class.csv`, `calibration_reliability_bins.csv` | Table 14, Fig. 6 |
+| `results/auxiliary/` | XGBoost tuning check, focal-loss gamma sweep, LightGBM configuration probe | Sections 4.1, 5.8 |
 
-## Summary of findings
+The per-unit prediction and probability files (`.npz`, several gigabytes in total) are not stored
+in the repository. They are regenerated by `rerun_with_predictions.py`, and every summary file
+above was computed from them by the scripts listed in the layout.
 
-- **Model family matters more than the imbalance technique.** On Dataset A, class-weighted XGBoost
-  reaches macro-F1 0.938 (10-fold) versus 0.736 for the best MLP configuration — a gap several times
-  larger than the spread between imbalance techniques.
-- **Difficulty tracks feature overlap, not rarity.** The rarest classes are often among the easiest;
-  feature-overlapped attack classes stay hard regardless of frequency.
-- **A three-way family ordering.** Gradient-boosted trees rank above the MLP, which ranks above the
-  deep tabular network (TabNet), consistent with the broader tabular-learning literature.
-- **Adversarial robustness has a real cost.** Adversarial training cuts attack success from 97.5% to
-  15.5% but at a measurable clean-accuracy cost, and it shifts the model's reliance toward features
-  an attacker cannot manipulate.
+## Figures
+
+`figures/` contains one script per figure. Each script reads only the CSV files that sit beside
+it (copies of the corresponding files in `results/`) and writes a `.png` and a `.pdf` at 600 DPI:
+
+| Script | Figure |
+|---|---|
+| `fig_difficulty_vs_rarity_overlap.py` | Fig. 1: per-class F1 against class size and against composite overlap |
+| `fig_rarity_sweep.py` | Fig. 2: controlled rarity sweep |
+| `fig_overlap_controlled.py` | Fig. 3: controlled overlap sweep |
+| `fig_protocol_robustness.py` | Fig. 4: macro-F1 under random folds, time-block folds and native features |
+| `fig_shap_margin.py` | Fig. 5: SHAP attribution margin against overlap and class size |
+| `fig_reliability.py` | Fig. 6: reliability diagrams |
+
+```bash
+cd figures && python fig_protocol_robustness.py
+```
+
+## Hardware and run times
+
+All reported runs were made on one laptop: NVIDIA GeForce RTX 3050 (4 GB), Intel Core i5-11300H,
+16 GB RAM, Windows 11. The 250-unit main comparison took 14.3 GPU-hours, the controlled
+experiments about 1.5 hours, the protocol checks and SHAP analysis about 8 hours, the overlap
+measures about 20 minutes and the calibration analysis a few minutes.
+
+XGBoost results are deterministic and reproduce exactly between runs. LightGBM on the two large
+datasets varies by up to 0.12 macro-F1 between runs because its multithreaded training is not
+deterministic by default; all such variation lies within the collapsed regime reported in the
+paper. The MLP is seeded (Python, NumPy, PyTorch on CPU and GPU, cuDNN deterministic mode).
+
+## Scripts for analyses no longer in the paper
+
+`adversarial_robustness.py`, `pgd_attack.py`, `explanation_robustness_experiment.py`,
+`shap_hard_classes.py`, `tabnet_baseline.py` and `make_tree_vs_mlp_table.py` belong to analyses
+(adversarial robustness, SHAP drift, a TabNet baseline) that were removed from the paper and are
+not reported. They are kept so that the history of the code is complete, and because
+`rerun_with_predictions.py` optionally imports `tabnet_baseline.py`. They are not maintained.
 
 ## License
 
-Released under the MIT License. See `LICENSE` for details.
+MIT, see `LICENSE`.
