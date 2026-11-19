@@ -1,0 +1,19 @@
+{
+  "dataset": "cicids2017",
+  "fold": 0,
+  "seed": 42,
+  "macro_f1": 0.7537942482789728,
+  "train_seconds": 541.4894824028015,
+  "rerun_macro_f1": 0.7537942482789728,
+  "abs_difference": 0.0,
+  "exact_shap_seconds": 10.203373193740845,
+  "additivity_max_abs_error": 1.7136335372924805e-05,
+  "stability_seconds": 1.2836613655090332,
+  "stability_info": {
+    "n_draws": 5,
+    "bg_size": 200,
+    "sample_bootstrap": "ok",
+    "background_check": "unavailable: NotImplementedError('Categorical split is not yet supported. You can still use TreeExplainer with `feature_perturbation=tree_path_dependent`.')"
+  },
+  "total_seconds": 590.5088880062103
+}

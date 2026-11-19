@@ -1,0 +1,93 @@
+{
+  "dataset": "unsw_nb15",
+  "experiment": "time_blocks",
+  "n_folds": 5,
+  "ordering": {
+    "order": "file order, then Stime (flow start, epoch seconds), then row order",
+    "chronology_known": true,
+    "stime_missing": 0,
+    "stime_min": 1421927377.0,
+    "stime_max": 1424262068.0
+  },
+  "class_names": [
+    "Analysis",
+    "Backdoors",
+    "DoS",
+    "Exploits",
+    "Fuzzers",
+    "Generic",
+    "Normal",
+    "Reconnaissance",
+    "Shellcode",
+    "Worms"
+  ],
+  "val_sizes": [
+    508014,
+    508011,
+    508009,
+    508008,
+    508005
+  ],
+  "val_class_counts": [
+    [
+      536,
+      466,
+      3271,
+      8905,
+      4850,
+      43097,
+      443753,
+      2798,
+      303,
+      35
+    ],
+    [
+      536,
+      466,
+      3271,
+      8905,
+      4849,
+      43096,
+      443753,
+      2798,
+      302,
+      35
+    ],
+    [
+      535,
+      466,
+      3271,
+      8905,
+      4849,
+      43096,
+      443753,
+      2797,
+      302,
+      35
+    ],
+    [
+      535,
+      466,
+      3270,
+      8905,
+      4849,
+      43096,
+      443753,
+      2797,
+      302,
+      35
+    ],
+    [
+      535,
+      465,
+      3270,
+      8905,
+      4849,
+      43096,
+      443752,
+      2797,
+      302,
+      34
+    ]
+  ]
+}

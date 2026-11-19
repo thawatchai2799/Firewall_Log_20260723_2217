@@ -1,0 +1,19 @@
+{
+  "dataset": "ertam_kaya",
+  "fold": 0,
+  "seed": 42,
+  "macro_f1": 0.9632311897972002,
+  "train_seconds": 3.9771063327789307,
+  "rerun_macro_f1": 0.9632311897972002,
+  "abs_difference": 0.0,
+  "exact_shap_seconds": 0.4153475761413574,
+  "additivity_max_abs_error": 9.271316230297089e-06,
+  "stability_seconds": 1.0575063228607178,
+  "stability_info": {
+    "n_draws": 5,
+    "bg_size": 200,
+    "sample_bootstrap": "ok",
+    "background_check": "unavailable: NotImplementedError('Categorical split is not yet supported. You can still use TreeExplainer with `feature_perturbation=tree_path_dependent`.')"
+  },
+  "total_seconds": 5.6546854972839355
+}

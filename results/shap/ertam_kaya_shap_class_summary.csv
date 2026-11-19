@@ -1,0 +1,5 @@
+class,n_explained,n_from_validation,n_from_training,total_importance,concentration_top1,top1_feature,top2_feature,nearest_profile_class,nearest_profile_cosine,attribution_margin,closest_rival_class
+allow,300,300,0,11.25801985684821,0.6186067570699995,duration,bytes_received,deny,0.16596648757376725,15.840964229393673,reset-both
+deny,300,300,0,6.05672108592252,0.5929788250993228,dst_port,bytes_total,drop,0.9641040315533879,8.042624637433523,drop
+drop,300,300,0,6.411898537332502,0.66010429723808,dst_port,src_port,deny,0.9641040315533879,10.438496580906213,allow
+reset-both,20,11,9,5.486522788042201,0.5676161499696865,dst_port,bytes_sent,drop,0.9444668597216048,9.529561514974727,deny

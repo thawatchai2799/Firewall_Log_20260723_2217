@@ -1,0 +1,25 @@
+{
+  "n_features": 11,
+  "features": [
+    "Source Port",
+    "Destination Port",
+    "NAT Source Port",
+    "NAT Destination Port",
+    "Bytes",
+    "Bytes Sent",
+    "Bytes Received",
+    "Packets",
+    "Elapsed Time (sec)",
+    "pkts_sent",
+    "pkts_received"
+  ],
+  "dropped_columns": [
+    "Action"
+  ],
+  "integer_encoded": [],
+  "dropped_constant_columns": [],
+  "n_values_imputed": 0,
+  "dataset": "ertam_kaya",
+  "experiment": "full_features",
+  "canonical_n_features": 9
+}

@@ -1,0 +1,55 @@
+{
+  "dataset": "ertam_kaya",
+  "experiment": "time_blocks",
+  "n_folds": 5,
+  "ordering": {
+    "order": "row order of the published file",
+    "chronology_known": false,
+    "note": "no timestamp in the Ertam & Kaya file"
+  },
+  "class_names": [
+    "allow",
+    "deny",
+    "drop",
+    "reset-both"
+  ],
+  "val_sizes": [
+    13108,
+    13107,
+    13106,
+    13106,
+    13105
+  ],
+  "val_class_counts": [
+    [
+      7528,
+      2998,
+      2571,
+      11
+    ],
+    [
+      7528,
+      2998,
+      2570,
+      11
+    ],
+    [
+      7528,
+      2997,
+      2570,
+      11
+    ],
+    [
+      7528,
+      2997,
+      2570,
+      11
+    ],
+    [
+      7528,
+      2997,
+      2570,
+      10
+    ]
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "n_features": 43,
+  "features": [
+    "sport",
+    "dsport",
+    "proto",
+    "state",
+    "dur",
+    "sbytes",
+    "dbytes",
+    "sttl",
+    "dttl",
+    "sloss",
+    "dloss",
+    "service",
+    "Sload",
+    "Dload",
+    "Spkts",
+    "Dpkts",
+    "swin",
+    "dwin",
+    "stcpb",
+    "dtcpb",
+    "smeansz",
+    "dmeansz",
+    "trans_depth",
+    "res_bdy_len",
+    "Sjit",
+    "Djit",
+    "Sintpkt",
+    "Dintpkt",
+    "tcprtt",
+    "synack",
+    "ackdat",
+    "is_sm_ips_ports",
+    "ct_state_ttl",
+    "ct_flw_http_mthd",
+    "is_ftp_login",
+    "ct_ftp_cmd",
+    "ct_srv_src",
+    "ct_srv_dst",
+    "ct_dst_ltm",
+    "ct_src_ ltm",
+    "ct_src_dport_ltm",
+    "ct_dst_sport_ltm",
+    "ct_dst_src_ltm"
+  ],
+  "dropped_columns": [
+    "Label",
+    "Ltime",
+    "Stime",
+    "attack_cat",
+    "dstip",
+    "srcip"
+  ],
+  "integer_encoded": [
+    {
+      "column": "proto",
+      "n_levels": 135
+    },
+    {
+      "column": "state",
+      "n_levels": 16
+    },
+    {
+      "column": "service",
+      "n_levels": 13
+    },
+    {
+      "column": "ct_ftp_cmd",
+      "n_levels": 9
+    }
+  ],
+  "dropped_constant_columns": [],
+  "n_values_imputed": 2778336,
+  "dataset": "unsw_nb15",
+  "experiment": "full_features",
+  "canonical_n_features": 10
+}

@@ -1,0 +1,17 @@
+class,other,cosine
+allow,allow,1.0
+allow,deny,0.16596648757376725
+allow,drop,0.11768150584300707
+allow,reset-both,0.14480442322617557
+deny,allow,0.16596648757376725
+deny,deny,1.0
+deny,drop,0.9641040315533879
+deny,reset-both,0.9319540357044049
+drop,allow,0.11768150584300707
+drop,deny,0.9641040315533879
+drop,drop,1.0
+drop,reset-both,0.9444668597216048
+reset-both,allow,0.14480442322617557
+reset-both,deny,0.9319540357044049
+reset-both,drop,0.9444668597216048
+reset-both,reset-both,1.0000000000000002

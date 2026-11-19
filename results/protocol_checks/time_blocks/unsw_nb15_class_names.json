@@ -1,0 +1,38 @@
+{
+  "class_names": [
+    "Analysis",
+    "Backdoors",
+    "DoS",
+    "Exploits",
+    "Fuzzers",
+    "Generic",
+    "Normal",
+    "Reconnaissance",
+    "Shellcode",
+    "Worms"
+  ],
+  "feature_names": [
+    "src_port",
+    "dst_port",
+    "protocol",
+    "duration",
+    "bytes_total",
+    "bytes_sent",
+    "bytes_received",
+    "packets_total",
+    "packets_sent",
+    "packets_received"
+  ],
+  "class_counts": [
+    2677,
+    2329,
+    16353,
+    44525,
+    24246,
+    215481,
+    2218764,
+    13987,
+    1511,
+    174
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "class_names": [
+    "allow",
+    "deny",
+    "drop",
+    "reset-both"
+  ],
+  "feature_names": [
+    "Source Port",
+    "Destination Port",
+    "NAT Source Port",
+    "NAT Destination Port",
+    "Bytes",
+    "Bytes Sent",
+    "Bytes Received",
+    "Packets",
+    "Elapsed Time (sec)",
+    "pkts_sent",
+    "pkts_received"
+  ],
+  "class_counts": [
+    37640,
+    14987,
+    12851,
+    54
+  ]
+}

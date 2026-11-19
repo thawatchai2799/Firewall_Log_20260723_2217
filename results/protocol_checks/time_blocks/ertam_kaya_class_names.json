@@ -1,0 +1,25 @@
+{
+  "class_names": [
+    "allow",
+    "deny",
+    "drop",
+    "reset-both"
+  ],
+  "feature_names": [
+    "src_port",
+    "dst_port",
+    "duration",
+    "bytes_total",
+    "bytes_sent",
+    "bytes_received",
+    "packets_total",
+    "packets_sent",
+    "packets_received"
+  ],
+  "class_counts": [
+    37640,
+    14987,
+    12851,
+    54
+  ]
+}

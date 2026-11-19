@@ -1,0 +1,5 @@
+class,n_explained,sample_rho_between_draws_mean,sample_rho_between_draws_min,sample_rho_vs_exact_mean,sample_rho_vs_exact_min,sample_top1_agreement_between_draws,sample_top1_matches_exact
+allow,100,0.9533333333333334,0.8833333333333333,0.97,0.9333333333333332,1.0,1.0
+deny,100,0.9933333333333334,0.9833333333333333,0.9966666666666667,0.9833333333333333,1.0,1.0
+drop,100,1.0,1.0,1.0,1.0,1.0,1.0
+reset-both,20,0.97,0.9,0.9766666666666666,0.9500000000000001,1.0,1.0

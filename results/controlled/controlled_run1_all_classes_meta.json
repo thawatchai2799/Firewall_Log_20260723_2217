@@ -1,0 +1,49 @@
+{
+  "dataset": "ertam_kaya",
+  "device": "cuda",
+  "n_classes": 4,
+  "class_names": [
+    "allow",
+    "deny",
+    "drop",
+    "reset-both"
+  ],
+  "train_rows": 49149,
+  "test_rows": 16383,
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "models": [
+    "mlp",
+    "xgb"
+  ],
+  "rarity_levels": [
+    25,
+    50,
+    100,
+    250,
+    500,
+    1000,
+    2500,
+    5000
+  ],
+  "alpha_levels": [
+    0.0,
+    0.3,
+    0.5,
+    0.65,
+    0.8,
+    0.9,
+    1.0
+  ],
+  "mlp": {
+    "hidden_size": 200,
+    "epochs": 100,
+    "batch_size": 512,
+    "lr": 0.001
+  },
+  "total_seconds": 5285.799999999999,
+  "note": "Rarity is varied by subsampling the target class in the training set only; the test set is identical across all conditions. Note that subsampling also lowers the local density of the class, so the overlap measured at small n is not comparable with the overlap measured on the full class; the measured_N3 column records this rather than holding it fixed. Overlap is varied by blending every point of the target class a fraction alpha towards a randomly matched point of its nearest competing class. The pool of partner points is drawn from the training split and the same pool is used for the training and the test split, so both are mapped into the same region of feature space and the resulting drop in F1 reflects class overlap rather than a train/test mismatch. Overlap is re-measured at every level so the manipulation is verified rather than assumed."
+}

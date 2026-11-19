@@ -1,0 +1,19 @@
+{
+  "dataset": "unsw_nb15",
+  "fold": 0,
+  "seed": 42,
+  "macro_f1": 0.6241524978646666,
+  "train_seconds": 324.5230989456177,
+  "rerun_macro_f1": 0.6241524978646666,
+  "abs_difference": 0.0,
+  "exact_shap_seconds": 7.941694498062134,
+  "additivity_max_abs_error": 1.3783574104309082e-05,
+  "stability_seconds": 0.9193496704101562,
+  "stability_info": {
+    "n_draws": 5,
+    "bg_size": 200,
+    "sample_bootstrap": "ok",
+    "background_check": "unavailable: NotImplementedError('Categorical split is not yet supported. You can still use TreeExplainer with `feature_perturbation=tree_path_dependent`.')"
+  },
+  "total_seconds": 358.5587544441223
+}

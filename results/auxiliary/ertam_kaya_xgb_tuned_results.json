@@ -1,0 +1,103 @@
+{
+  "summary": {
+    "fixed": {
+      "mean_macro_f1": 0.9370228442501997,
+      "std_macro_f1": 0.02408179243147045,
+      "per_fold_macro_f1": [
+        0.9632311897972002,
+        0.9437998892187698,
+        0.8913484268881895,
+        0.9436834401240628,
+        0.9430512752227755
+      ],
+      "mean_per_class_f1": [
+        0.9998007147658002,
+        0.9974631385970909,
+        0.9984465712569548,
+        0.7523809523809524
+      ],
+      "class_names": [
+        "allow",
+        "deny",
+        "drop",
+        "reset-both"
+      ]
+    },
+    "tuned": {
+      "mean_macro_f1": 0.9280777814744561,
+      "std_macro_f1": 0.025545655089191485,
+      "per_fold_macro_f1": [
+        0.9534490752878846,
+        0.9231429524950919,
+        0.8817827208034059,
+        0.9333493626643709,
+        0.9486647961215269
+      ],
+      "mean_per_class_f1": [
+        0.9998007218273937,
+        0.9972619466752046,
+        0.9984465712569548,
+        0.7168018861382706
+      ],
+      "class_names": [
+        "allow",
+        "deny",
+        "drop",
+        "reset-both"
+      ],
+      "chosen_params_per_fold": [
+        {
+          "colsample_bytree": 0.9,
+          "gamma": 0.5,
+          "learning_rate": 0.08898896996100202,
+          "max_depth": 4,
+          "min_child_weight": 5,
+          "n_estimators": 400,
+          "subsample": 0.9
+        },
+        {
+          "colsample_bytree": 0.9,
+          "gamma": 0.5,
+          "learning_rate": 0.08898896996100202,
+          "max_depth": 4,
+          "min_child_weight": 5,
+          "n_estimators": 400,
+          "subsample": 0.9
+        },
+        {
+          "colsample_bytree": 1,
+          "gamma": 0.5,
+          "learning_rate": 0.19614745753554122,
+          "max_depth": 4,
+          "min_child_weight": 10,
+          "n_estimators": 600,
+          "subsample": 0.9
+        },
+        {
+          "colsample_bytree": 1,
+          "gamma": 0.5,
+          "learning_rate": 0.19614745753554122,
+          "max_depth": 4,
+          "min_child_weight": 10,
+          "n_estimators": 600,
+          "subsample": 0.9
+        },
+        {
+          "colsample_bytree": 0.9,
+          "gamma": 0.5,
+          "learning_rate": 0.08898896996100202,
+          "max_depth": 4,
+          "min_child_weight": 5,
+          "n_estimators": 400,
+          "subsample": 0.9
+        }
+      ]
+    }
+  },
+  "tuned_vs_fixed": {
+    "wilcoxon_statistic": 1.0,
+    "wilcoxon_p": 0.125,
+    "mean_gain_macro_f1": -0.008945062775743539,
+    "paired_cohens_d": -0.9533633294410327
+  }
+}

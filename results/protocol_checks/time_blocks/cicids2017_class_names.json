@@ -1,0 +1,46 @@
+{
+  "class_names": [
+    "BENIGN",
+    "Bot",
+    "DDoS",
+    "DoS GoldenEye",
+    "DoS Hulk",
+    "DoS Slowhttptest",
+    "DoS slowloris",
+    "FTP-Patator",
+    "Heartbleed",
+    "Infiltration",
+    "PortScan",
+    "SSH-Patator",
+    "Web Attack \ufffd Brute Force",
+    "Web Attack \ufffd Sql Injection",
+    "Web Attack \ufffd XSS"
+  ],
+  "feature_names": [
+    "dst_port",
+    "duration",
+    "bytes_total",
+    "bytes_sent",
+    "bytes_received",
+    "packets_total",
+    "packets_sent",
+    "packets_received"
+  ],
+  "class_counts": [
+    2273097,
+    1966,
+    128027,
+    10293,
+    231073,
+    5499,
+    5796,
+    7938,
+    11,
+    36,
+    158930,
+    5897,
+    1507,
+    21,
+    652
+  ]
+}
